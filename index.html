@@ -741,15 +741,16 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     return p;
   }
 
-  // Pick the protection scheme for a comparison level, preferring schemes that fit the node count.
+  // Pick the protection scheme for a comparison level: the most efficient one that fits the
+  // node count; if none fits, the one with the lowest node requirement (usually the mirror).
   function pickProt(b, N, level) {
     const ft = level.startsWith("ft2") ? 2 : 1;
     const effOnly = level.endsWith("e");
     const pool = b.prot.filter(p => p.ft === ft && (effOnly || p.kind === "m"));
+    if (!pool.length) return b.prot[0];
     const fit = pool.filter(p => p.min <= N);
-    const list = fit.length ? fit : pool;
-    if (!list.length) return b.prot[0];
-    return list.reduce((a, c) => effOf(c, N) > effOf(a, N) ? c : a);
+    if (fit.length) return fit.reduce((a, c) => effOf(c, N) > effOf(a, N) ? c : a);
+    return pool.reduce((a, c) => c.min < a.min || (c.min === a.min && effOf(c, N) > effOf(a, N)) ? c : a);
   }
 
   // ---------- core sizing model ----------
