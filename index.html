@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kalkulator sizing HCI multi-brand: vCPU, memori, dan storage dari raw hingga usable, dengan mode perbandingan antar brand.">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>HCI Sizer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: rack-style two-pane tool. Spec sheet (inputs) left, live readout (detail or brand comparison) right & sticky. */
+:root {
+  --bg: #ECEFF2;
+  --panel: #FFFFFF;
+  --panel-2: #F6F8FA;
+  --ink: #131A22;
+  --muted: #5A6675;
+  --line: #D3D9E0;
+  --accent: #1C58D1;
+  --accent-soft: #E2EAFA;
+  --accent-ink: #FFFFFF;
+  --ok: #1D7A4E;
+  --ok-soft: #E1F2E9;
+  --warn: #A86300;
+  --warn-soft: #FBEFD9;
+  --crit: #BF3428;
+  --crit-soft: #FBE3E0;
+  --bar-total: #8D9AAA;
+  --bar-loss: #E7B0A9;
+  --bar-result: #1C58D1;
+  --bar-gain: #2F9A69;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1318; --panel: #151C24; --panel-2: #1A222C; --ink: #E4E9EF; --muted: #93A0AE; --line: #29333F;
+    --accent: #6F9BFF; --accent-soft: #1A2946; --accent-ink: #0E1318;
+    --ok: #4CC38A; --ok-soft: #12291F; --warn: #E8A53C; --warn-soft: #2E2312; --crit: #F06A5E; --crit-soft: #331816;
+    --bar-total: #5E6B7A; --bar-loss: #7A3A34; --bar-result: #6F9BFF; --bar-gain: #3FAF7C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1318; --panel: #151C24; --panel-2: #1A222C; --ink: #E4E9EF; --muted: #93A0AE; --line: #29333F;
+  --accent: #6F9BFF; --accent-soft: #1A2946; --accent-ink: #0E1318;
+  --ok: #4CC38A; --ok-soft: #12291F; --warn: #E8A53C; --warn-soft: #2E2312; --crit: #F06A5E; --crit-soft: #331816;
+  --bar-total: #5E6B7A; --bar-loss: #7A3A34; --bar-result: #6F9BFF; --bar-gain: #3FAF7C;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1320px; margin: 0 auto;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header.top {
+  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 20px;
+}
+header.top h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: 28px; letter-spacing: -0.01em;
+  margin: 0; line-height: 1.1; text-wrap: balance;
+}
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+button, .btn {
+  font: 500 13px/1 var(--font-body); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 9px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
+@media (max-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Spec sheet ---------- */
+.sheet { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sec { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.sec > h2 {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.01em;
+}
+.sec > h2 small { font: 500 11px var(--font-mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.sec .body { padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label, .field .lab { font-size: 12px; color: var(--muted); font-weight: 500; }
+.field .hint { font-size: 11px; color: var(--muted); }
+.inp { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); overflow: hidden; }
+.inp:focus-within { border-color: var(--accent); }
+.inp input, .inp select {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink);
+  font: 500 14px var(--font-mono); padding: 8px 10px; font-variant-numeric: tabular-nums;
+}
+.inp input:focus, .inp select:focus { outline: none; }
+.inp .unit { display: flex; align-items: center; padding: 0 9px; font: 500 11px var(--font-mono); color: var(--muted); border-left: 1px solid var(--line); background: var(--panel); white-space: nowrap; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding-top: 18px; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.sub-h { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 2px 0 -4px; }
+
+.brands { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.brand { position: relative; }
+.brand input { position: absolute; opacity: 0; pointer-events: none; }
+.brand label {
+  display: flex; flex-direction: column; gap: 2px; height: 100%;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--panel-2);
+}
+.brand label b { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.brand label span { font-size: 11px; color: var(--muted); }
+.brand input:checked + label { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.brand input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.brand-note { font-size: 12px; color: var(--muted); background: var(--panel-2); border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
+
+/* ---------- Readout ---------- */
+.readout { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 980px) { .readout { position: static; } }
+.view { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.viewbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.viewbar .seg button { padding: 8px 14px; font: 600 13px var(--font-body); }
+.viewbar .ctx { font-size: 12px; color: var(--muted); }
+
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+@media (max-width: 620px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { background: var(--panel); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile .k { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.tile .v { font: 600 26px/1.15 var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile .v small { font: 500 13px var(--font-mono); color: var(--muted); margin-left: 3px; }
+.tile .s { font-size: 11px; color: var(--muted); }
+.tile.hero .v { color: var(--accent); }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 10px; font: 500 12px var(--font-mono); background: var(--panel); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.wf { display: grid; grid-template-columns: minmax(110px, 0.9fr) minmax(0, 2fr) auto; gap: 6px 10px; align-items: center; }
+.wf .lbl { font-size: 12.5px; min-width: 0; }
+.wf .lbl small { display: block; font-size: 11px; color: var(--muted); }
+.wf .track { position: relative; height: 18px; background: var(--panel-2); border-radius: 3px; }
+.wf .bar { position: absolute; top: 0; bottom: 0; border-radius: 3px; min-width: 1px; }
+.bar.total { background: var(--bar-total); }
+.bar.loss { background: var(--bar-loss); }
+.bar.result { background: var(--bar-result); }
+.bar.gain { background: var(--bar-gain); }
+.wf .val { font: 500 12.5px var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wf .val.neg { color: var(--crit); }
+.wf .strong { font-weight: 600; }
+.wf-foot { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.wf-foot b { font-family: var(--font-mono); font-weight: 600; }
+
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 620px) { .two { grid-template-columns: minmax(0, 1fr); } }
+
+.vmfit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vmfit div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.vmfit div.limit { border-color: var(--warn); background: var(--warn-soft); }
+.vmfit .k { font: 500 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.vmfit .v { font: 600 20px var(--font-display); font-variant-numeric: tabular-nums; }
+.vmtotal { font-size: 13px; }
+.vmtotal b { font: 600 18px var(--font-display); color: var(--accent); }
+
+.alerts { display: flex; flex-direction: column; gap: 6px; }
+.alert { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px 10px; border-radius: 6px; font-size: 12.5px; border: 1px solid transparent; }
+.alert .tag { font: 600 10px var(--font-mono); letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px; margin-top: 1px; }
+.alert.crit { background: var(--crit-soft); border-color: var(--crit); }
+.alert.crit .tag { background: var(--crit); color: var(--panel); }
+.alert.warn { background: var(--warn-soft); border-color: var(--warn); }
+.alert.warn .tag { background: var(--warn); color: var(--panel); }
+.alert.ok { background: var(--ok-soft); border-color: var(--ok); }
+.alert.ok .tag { background: var(--ok); color: var(--panel); }
+
+.net { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.net div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.net .k { font: 500 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.net .v { font: 600 17px var(--font-display); font-variant-numeric: tabular-nums; }
+
+.status { font: 600 11px var(--font-mono); padding: 3px 8px; border-radius: 999px; letter-spacing: 0.04em; white-space: nowrap; }
+.status.ok { background: var(--ok-soft); color: var(--ok); }
+.status.warn { background: var(--warn-soft); color: var(--warn); }
+.status.crit { background: var(--crit-soft); color: var(--crit); }
+
+/* ---------- Compare ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip label { display: inline-block; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; background: var(--panel-2); color: var(--muted); }
+.chip input:checked + label { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 500; }
+.chip input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tablewrap { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+table.cmp th { text-align: right; font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: bottom; }
+table.cmp th:first-child, table.cmp td:first-child { text-align: left; padding-left: 0; }
+table.cmp td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.cmp td:first-child { font-family: var(--font-body); white-space: normal; min-width: 150px; }
+table.cmp td:first-child b { font-family: var(--font-display); font-size: 14px; font-weight: 600; display: block; }
+table.cmp td:first-child small { color: var(--muted); font-size: 11px; display: block; }
+table.cmp tr.active td { background: var(--accent-soft); }
+table.cmp td.best { color: var(--ok); font-weight: 600; }
+table.cmp td .mini { height: 4px; border-radius: 2px; background: var(--panel-2); margin-top: 4px; position: relative; overflow: hidden; }
+table.cmp td .mini span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bar-result); border-radius: 2px; }
+table.cmp td .sub { display: block; font-size: 10.5px; color: var(--muted); }
+table.cmp button.go { padding: 5px 8px; font-size: 11.5px; }
+.legend { font-size: 11.5px; color: var(--muted); }
+.legend b { color: var(--ok); }
+
+.issue-list { display: flex; flex-direction: column; gap: 10px; }
+.issue-list h3 { margin: 0 0 4px; font: 600 13px var(--font-display); }
+
+.foot { margin-top: 20px; color: var(--muted); font-size: 12px; max-width: 90ch; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; font-size: 13px; }
+textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+@media (prefers-reduced-motion: no-preference) { .wf .bar, .mini span { transition: left .25s ease, width .25s ease; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>HCI <span>Sizer</span></h1>
+      <p>Hitung kapasitas vCPU, memori, dan storage cluster Hyper-Converged dari raw hingga usable, lalu bandingkan hasilnya antar brand untuk spesifikasi hardware yang sama.</p>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="btnReset">Reset ke default brand</button>
+      <button type="button" id="btnCopy" class="primary">Salin ringkasan</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- ================= SPEC SHEET ================= -->
+    <form class="sheet" id="form" autocomplete="off" onsubmit="return false">
+      <section class="sec">
+        <h2>Platform HCI <small>01 · brand</small></h2>
+        <div class="body">
+          <div class="brands" id="brands"></div>
+          <div class="brand-note" id="brandNote"></div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Cluster <small>02 · topologi</small></h2>
+        <div class="body">
+          <div class="fields">
+            <div class="field"><label for="nodes">Jumlah node / server</label><div class="inp"><input id="nodes" type="number" min="1" max="64" step="1" value="4"><span class="unit">node</span></div></div>
+            <div class="field"><label for="ha">Reserve HA compute</label><div class="inp"><select id="ha"><option value="0">N+0</option><option value="1" selected>N+1</option><option value="2">N+2</option></select></div></div>
+            <div class="field"><label for="rebuild">Reserve rebuild storage</label><div class="inp"><select id="rebuild"><option value="0">Tidak ada</option><option value="1" selected>1 node</option><option value="2">2 node</option></select></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Spesifikasi per server <small>03 · hardware</small></h2>
+        <div class="body">
+          <div class="sub-h">CPU</div>
+          <div class="fields">
+            <div class="field"><label for="sockets">Socket</label><div class="inp"><input id="sockets" type="number" min="1" max="8" step="1" value="2"><span class="unit">CPU</span></div></div>
+            <div class="field"><label for="cores">Core per socket</label><div class="inp"><input id="cores" type="number" min="1" max="256" step="1" value="16"><span class="unit">core</span></div></div>
+            <div class="field"><label for="ghz">Base clock</label><div class="inp"><input id="ghz" type="number" min="0.5" max="6" step="0.1" value="2.8"><span class="unit">GHz</span></div></div>
+            <label class="check" for="ht"><input id="ht" type="checkbox" checked> Hyper-Threading / SMT</label>
+          </div>
+          <div class="sub-h">Memori</div>
+          <div class="fields">
+            <div class="field"><label for="ram">RAM per server</label><div class="inp"><input id="ram" type="number" min="16" step="16" value="512"><span class="unit">GB</span></div></div>
+          </div>
+          <div class="sub-h">Disk kapasitas</div>
+          <div class="fields">
+            <div class="field"><label for="capQty">Jumlah disk</label><div class="inp"><input id="capQty" type="number" min="0" max="48" step="1" value="6"><span class="unit">disk</span></div></div>
+            <div class="field"><label for="capSize">Ukuran per disk</label><div class="inp"><input id="capSize" type="number" min="0" step="0.01" value="3.84"><span class="unit">TB</span></div></div>
+            <div class="field"><label for="capType">Tipe</label><div class="inp"><select id="capType"><option>NVMe</option><option>SSD</option><option>HDD</option></select></div></div>
+          </div>
+          <div class="sub-h">Disk cache / tier</div>
+          <div class="fields">
+            <div class="field"><label for="cacheQty">Jumlah disk</label><div class="inp"><input id="cacheQty" type="number" min="0" max="16" step="1" value="0"><span class="unit">disk</span></div></div>
+            <div class="field"><label for="cacheSize">Ukuran per disk</label><div class="inp"><input id="cacheSize" type="number" min="0" step="0.01" value="0.8"><span class="unit">TB</span></div></div>
+            <div class="field"><label for="cacheType">Tipe</label><div class="inp"><select id="cacheType"><option>NVMe</option><option selected>SSD</option></select></div></div>
+          </div>
+          <div class="sub-h">Network</div>
+          <div class="fields">
+            <div class="field"><label for="nicPorts">Port data/storage</label><div class="inp"><input id="nicPorts" type="number" min="1" max="16" step="1" value="2"><span class="unit">port</span></div></div>
+            <div class="field"><label for="nicSpeed">Kecepatan per port</label><div class="inp"><select id="nicSpeed"><option value="1">1 GbE</option><option value="10">10 GbE</option><option value="25" selected>25 GbE</option><option value="40">40 GbE</option><option value="50">50 GbE</option><option value="100">100 GbE</option></select></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Kebijakan sizing <small>04 · policy</small></h2>
+        <div class="body">
+          <div class="fields">
+            <div class="field" style="grid-column: span 2"><label for="prot">Proteksi data</label><div class="inp"><select id="prot"></select></div></div>
+            <div class="field"><label for="drr">Data reduction</label><div class="inp"><input id="drr" type="number" min="1" max="10" step="0.1" value="1.5"><span class="unit">: 1</span></div><span class="hint">Dedup + kompresi</span></div>
+            <div class="field"><label for="slack">Slack / free space</label><div class="inp"><input id="slack" type="number" min="0" max="60" step="1" value="10"><span class="unit">%</span></div></div>
+            <div class="field"><label for="fsOverhead">Overhead metadata</label><div class="inp"><input id="fsOverhead" type="number" min="0" max="30" step="0.5" value="5"><span class="unit">%</span></div></div>
+            <div class="field"><label for="vcpuRatio">Rasio vCPU</label><div class="inp"><input id="vcpuRatio" type="number" min="1" max="20" step="0.5" value="4"><span class="unit">: 1</span></div></div>
+            <div class="field"><label for="vcpuBasis">Basis rasio</label><div class="inp"><select id="vcpuBasis"><option value="core" selected>Core fisik</option><option value="thread">Thread (HT)</option></select></div></div>
+            <div class="field"><label for="memRatio">Overcommit RAM</label><div class="inp"><input id="memRatio" type="number" min="1" max="3" step="0.1" value="1"><span class="unit">: 1</span></div></div>
+            <div class="field"><label for="util">Batas utilisasi</label><div class="inp"><input id="util" type="number" min="10" max="100" step="5" value="90"><span class="unit">%</span></div><span class="hint">CPU &amp; RAM</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Overhead platform per node <small>05 · cvm / service</small></h2>
+        <div class="body">
+          <div class="fields">
+            <div class="field"><label for="ctrlCores">Core controller / CVM</label><div class="inp"><input id="ctrlCores" type="number" min="0" step="1" value="8"><span class="unit">core</span></div></div>
+            <div class="field"><label for="ctrlRam">RAM controller / CVM</label><div class="inp"><input id="ctrlRam" type="number" min="0" step="1" value="32"><span class="unit">GB</span></div></div>
+            <div class="field"><label for="hypRam">RAM hypervisor</label><div class="inp"><input id="hypRam" type="number" min="0" step="1" value="4"><span class="unit">GB</span></div></div>
+            <div class="field"><label for="diskCores">Core per disk (OSD)</label><div class="inp"><input id="diskCores" type="number" min="0" step="0.5" value="0"><span class="unit">core</span></div></div>
+            <div class="field"><label for="diskRam">RAM per disk (OSD)</label><div class="inp"><input id="diskRam" type="number" min="0" step="0.5" value="0"><span class="unit">GB</span></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2>Profil VM referensi <small>06 · workload</small></h2>
+        <div class="body">
+          <div class="fields">
+            <div class="field"><label for="vmVcpu">vCPU per VM</label><div class="inp"><input id="vmVcpu" type="number" min="1" step="1" value="4"><span class="unit">vCPU</span></div></div>
+            <div class="field"><label for="vmRam">RAM per VM</label><div class="inp"><input id="vmRam" type="number" min="1" step="1" value="16"><span class="unit">GB</span></div></div>
+            <div class="field"><label for="vmDisk">Disk per VM</label><div class="inp"><input id="vmDisk" type="number" min="1" step="10" value="200"><span class="unit">GB</span></div></div>
+          </div>
+        </div>
+      </section>
+    </form>
+
+    <!-- ================= READOUT ================= -->
+    <div class="readout" id="readout">
+      <div class="viewbar">
+        <span class="seg" role="group" aria-label="Tampilan hasil">
+          <button type="button" data-view="detail" aria-pressed="true">Detail sizing</button>
+          <button type="button" data-view="compare" aria-pressed="false">Bandingkan brand</button>
+        </span>
+        <span class="seg" role="group" aria-label="Satuan storage">
+          <button type="button" data-unit="TiB" aria-pressed="true">TiB</button>
+          <button type="button" data-unit="TB" aria-pressed="false">TB</button>
+        </span>
+      </div>
+
+      <!-- ===== DETAIL VIEW ===== -->
+      <div class="view" id="viewDetail">
+        <div class="tiles">
+          <div class="tile hero"><span class="k">vCPU tersedia</span><span class="v" id="tVcpu">–</span><span class="s" id="tVcpuS"></span></div>
+          <div class="tile hero"><span class="k">RAM tersedia</span><span class="v" id="tRam">–</span><span class="s" id="tRamS"></span></div>
+          <div class="tile hero"><span class="k">Usable storage</span><span class="v" id="tUse">–</span><span class="s" id="tUseS"></span></div>
+          <div class="tile"><span class="k">Effective</span><span class="v" id="tEff">–</span><span class="s" id="tEffS"></span></div>
+        </div>
+
+        <section class="sec">
+          <h2>Storage: raw → usable <small id="detailBrand"></small></h2>
+          <div class="body">
+            <div class="wf" id="wfStorage"></div>
+            <div class="wf-foot" id="wfStorageFoot"></div>
+          </div>
+        </section>
+
+        <div class="two">
+          <section class="sec">
+            <h2>Compute <small>core fisik</small></h2>
+            <div class="body"><div class="wf" id="wfCpu"></div><div class="wf-foot" id="wfCpuFoot"></div></div>
+          </section>
+          <section class="sec">
+            <h2>Memori <small>GB</small></h2>
+            <div class="body"><div class="wf" id="wfRam"></div><div class="wf-foot" id="wfRamFoot"></div></div>
+          </section>
+        </div>
+
+        <section class="sec">
+          <h2>Kapasitas VM <small id="vmProfile"></small></h2>
+          <div class="body">
+            <div class="vmfit" id="vmfit"></div>
+            <div class="vmtotal" id="vmtotal"></div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <h2>Network <small>per node</small></h2>
+          <div class="body"><div class="net" id="net"></div></div>
+        </section>
+
+        <section class="sec">
+          <h2>Validasi desain <span class="status" id="status">OK</span></h2>
+          <div class="body"><div class="alerts" id="alerts"></div></div>
+        </section>
+      </div>
+
+      <!-- ===== COMPARE VIEW ===== -->
+      <div class="view" id="viewCompare" hidden>
+        <section class="sec">
+          <h2>Pengaturan perbandingan</h2>
+          <div class="body">
+            <div class="field"><span class="lab">Brand yang dibandingkan</span><div class="chips" id="cmpBrands"></div></div>
+            <div class="fields">
+              <div class="field"><label for="cmpLevel">Tingkat proteksi</label><div class="inp"><select id="cmpLevel">
+                <option value="ft1m" selected>FT1 · mirror / 2 copy</option>
+                <option value="ft1e">FT1 · paling efisien (EC jika muat)</option>
+                <option value="ft2m">FT2 · mirror / 3 copy</option>
+                <option value="ft2e">FT2 · paling efisien (EC jika muat)</option>
+              </select></div></div>
+              <div class="field"><label for="cmpDrr">Data reduction</label><div class="inp"><select id="cmpDrr">
+                <option value="brand" selected>Default tiap brand</option>
+                <option value="input">Seragam (nilai di form)</option>
+              </select></div></div>
+              <div class="field"><label for="cmpOverhead">Overhead &amp; slack</label><div class="inp"><select id="cmpOverhead">
+                <option value="brand" selected>Default tiap brand</option>
+                <option value="input">Seragam (nilai di form)</option>
+              </select></div></div>
+            </div>
+            <p class="legend">Hardware, jumlah node, reserve HA, rasio vCPU, overcommit RAM, dan batas utilisasi diambil dari form dan sama untuk semua brand. Nilai <b>terbaik</b> per kolom ditandai hijau. Baris biru adalah brand yang sedang dipilih di form.</p>
+          </div>
+        </section>
+
+        <section class="sec">
+          <h2>Hasil berdampingan <small id="cmpSpec"></small></h2>
+          <div class="body">
+            <div class="tablewrap"><table class="cmp" id="cmpTable"></table></div>
+          </div>
+        </section>
+
+        <section class="sec">
+          <h2>Isu desain per brand</h2>
+          <div class="body"><div class="issue-list" id="cmpIssues"></div></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">Nilai default overhead, proteksi, dan slack per brand adalah estimasi umum dari dokumentasi publik dan praktik lapangan. Untuk proposal final, validasi dengan sizer resmi vendor (Nutanix Sizer, VMware vSAN ReadyNode Sizer, Sangfor HCI Sizer, Ceph/Proxmox calculator, Azure Local sizer). Raw ditulis dalam TB desimal seperti label disk; TiB = TB × 0,9095.</p>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const TB_TO_TIB = 1e12 / Math.pow(2, 40);
+
+  // Protection: eff = usable/pool (number or fn of node count), min = minimum nodes,
+  // ft = failures tolerated, kind = "m" (mirror/replica) or "ec" (erasure coding / parity).
+  const BRANDS = {
+    nutanix: {
+      name: "Nutanix", sub: "AHV · AOS", minNodes: 3,
+      ctrlCores: 8, ctrlRam: 32, hypRam: 4, diskCores: 0, diskRam: 0,
+      cacheCounts: true, fsOverhead: 5, slack: 10, drr: 1.5, rebuild: 1, azureReserve: false,
+      note: "CVM berjalan di tiap node (default 8 vCPU / 32 GB, bisa 12+ vCPU dan 48 GB untuk all-NVMe atau fitur dedup). Semua SSD/NVMe masuk ke storage pool, jadi disk 'cache' ikut dihitung sebagai kapasitas. EC-X hanya berlaku untuk data dingin, jadi efisiensi nyata ada di antara RF2 dan EC-X.",
+      prot: [
+        { id: "rf2", label: "RF2 · 2 copy (FT1)", eff: 1/2, min: 3, ft: 1, kind: "m" },
+        { id: "rf3", label: "RF3 · 3 copy (FT2)", eff: 1/3, min: 5, ft: 2, kind: "m" },
+        { id: "ecx21", label: "EC-X RF2 · 2+1", eff: 2/3, min: 4, ft: 1, kind: "ec" },
+        { id: "ecx41", label: "EC-X RF2 · 4+1", eff: 4/5, min: 6, ft: 1, kind: "ec" },
+        { id: "ecx42", label: "EC-X RF3 · 4+2", eff: 4/6, min: 7, ft: 2, kind: "ec" },
+      ],
+    },
+    vsan_esa: {
+      name: "VMware vSAN ESA", sub: "vSphere 8+ · NVMe", minNodes: 3,
+      ctrlCores: 2, ctrlRam: 24, hypRam: 4, diskCores: 0, diskRam: 0,
+      cacheCounts: true, fsOverhead: 2, slack: 15, drr: 1.5, rebuild: 1, azureReserve: false,
+      note: "ESA tidak memakai cache tier: semua disk NVMe adalah kapasitas (isi disk cache = 0). Reserve rebuild 1 host + operations reserve ~10–15%. RAID-5 memakai 2+1 di cluster 3–5 host dan 4+1 di 6+ host.",
+      prot: [
+        { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
+        { id: "r5a", label: "RAID-5 · FTT1 (2+1)", eff: 2/3, min: 3, ft: 1, kind: "ec" },
+        { id: "r5b", label: "RAID-5 · FTT1 (4+1)", eff: 4/5, min: 6, ft: 1, kind: "ec" },
+        { id: "r1f2", label: "RAID-1 · FTT2 mirror", eff: 1/3, min: 5, ft: 2, kind: "m" },
+        { id: "r6", label: "RAID-6 · FTT2 (4+2)", eff: 4/6, min: 6, ft: 2, kind: "ec" },
+      ],
+    },
+    vsan_osa: {
+      name: "VMware vSAN OSA", sub: "disk group · cache tier", minNodes: 3,
+      ctrlCores: 2, ctrlRam: 16, hypRam: 4, diskCores: 0, diskRam: 0,
+      cacheCounts: false, fsOverhead: 1, slack: 25, drr: 1.3, rebuild: 1, azureReserve: false,
+      note: "Setiap disk group butuh 1 disk cache (tidak dihitung kapasitas). VMware menyarankan slack 25–30%. Dedup & kompresi hanya untuk all-flash.",
+      prot: [
+        { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
+        { id: "r5", label: "RAID-5 · FTT1 (3+1)", eff: 3/4, min: 4, ft: 1, kind: "ec" },
+        { id: "r1f2", label: "RAID-1 · FTT2 mirror", eff: 1/3, min: 5, ft: 2, kind: "m" },
+        { id: "r6", label: "RAID-6 · FTT2 (4+2)", eff: 4/6, min: 6, ft: 2, kind: "ec" },
+      ],
+    },
+    vxrail: {
+      name: "Dell VxRail", sub: "vSAN ESA / OSA", minNodes: 3,
+      ctrlCores: 2, ctrlRam: 24, hypRam: 4, diskCores: 0, diskRam: 0,
+      cacheCounts: true, fsOverhead: 2, slack: 15, drr: 1.5, rebuild: 1, azureReserve: false,
+      note: "VxRail memakai vSAN; default di sini mengikuti vSAN ESA. Untuk VxRail OSA (hybrid / disk group), set slack 25–30% dan perlakukan disk cache sebagai non-kapasitas. VxRail Manager memakai ~2 vCPU / 8 GB di cluster.",
+      prot: [
+        { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
+        { id: "r5a", label: "RAID-5 · FTT1 (2+1)", eff: 2/3, min: 3, ft: 1, kind: "ec" },
+        { id: "r5b", label: "RAID-5 · FTT1 (4+1)", eff: 4/5, min: 6, ft: 1, kind: "ec" },
+        { id: "r1f2", label: "RAID-1 · FTT2 mirror", eff: 1/3, min: 5, ft: 2, kind: "m" },
+        { id: "r6", label: "RAID-6 · FTT2 (4+2)", eff: 4/6, min: 6, ft: 2, kind: "ec" },
+      ],
+    },
+    sangfor: {
+      name: "Sangfor HCI", sub: "aSV · aSAN", minNodes: 3,
+      ctrlCores: 4, ctrlRam: 16, hypRam: 8, diskCores: 0, diskRam: 0,
+      cacheCounts: false, fsOverhead: 5, slack: 10, drr: 1.0, rebuild: 1, azureReserve: false,
+      note: "aSAN memakai SSD sebagai cache tier pada konfigurasi hybrid (tidak dihitung kapasitas). Overhead aSV + aSAN diestimasi 4 core dan ~24 GB per node; angka pasti tergantung versi dan jumlah disk.",
+      prot: [
+        { id: "rep2", label: "2 replika (FT1)", eff: 1/2, min: 2, ft: 1, kind: "m" },
+        { id: "rep3", label: "3 replika (FT2)", eff: 1/3, min: 3, ft: 2, kind: "m" },
+        { id: "ec21", label: "EC 2+1", eff: 2/3, min: 3, ft: 1, kind: "ec" },
+        { id: "ec41", label: "EC 4+1", eff: 4/5, min: 5, ft: 1, kind: "ec" },
+        { id: "ec42", label: "EC 4+2", eff: 4/6, min: 6, ft: 2, kind: "ec" },
+      ],
+    },
+    proxmox: {
+      name: "Proxmox VE", sub: "KVM · Ceph RBD", minNodes: 3,
+      ctrlCores: 0, ctrlRam: 0, hypRam: 4, diskCores: 1, diskRam: 5,
+      cacheCounts: false, fsOverhead: 3, slack: 15, drr: 1.0, rebuild: 1, azureReserve: false,
+      note: "Overhead Ceph dihitung per OSD (1 disk = 1 OSD): ~1 core dan ~5 GB RAM (osd_memory_target 4 GB + buffer). Disk cache dipakai untuk WAL/DB, bukan kapasitas. Slack 15% menjaga di bawah nearfull ratio 85%. Ceph tidak melakukan dedup.",
+      prot: [
+        { id: "rep3", label: "Replika 3/2 (standar Ceph)", eff: 1/3, min: 3, ft: 2, kind: "m" },
+        { id: "rep2", label: "Replika 2/1 (tidak disarankan)", eff: 1/2, min: 2, ft: 1, kind: "m" },
+        { id: "ec21", label: "EC 2+1", eff: 2/3, min: 4, ft: 1, kind: "ec" },
+        { id: "ec42", label: "EC 4+2", eff: 4/6, min: 7, ft: 2, kind: "ec" },
+        { id: "ec83", label: "EC 8+3", eff: 8/11, min: 12, ft: 3, kind: "ec" },
+      ],
+    },
+    azure: {
+      name: "Azure Local", sub: "Hyper-V · S2D", minNodes: 1,
+      ctrlCores: 2, ctrlRam: 8, hypRam: 8, diskCores: 0, diskRam: 0,
+      cacheCounts: false, fsOverhead: 2, slack: 10, drr: 1.0, rebuild: 0, azureReserve: true,
+      note: "Storage Spaces Direct menyarankan reserve setara 1 disk kapasitas per server (maksimal 4 disk) untuk repair in-place, sehingga reserve rebuild 1 node tidak wajib. Efisiensi dual parity naik dengan jumlah node: 50% (4–6), 66,7% (7–8), 75% (9–15), 80% (16).",
+      prot: [
+        { id: "m2", label: "Two-way mirror (FT1)", eff: 1/2, min: 2, ft: 1, kind: "m" },
+        { id: "m3", label: "Three-way mirror (FT2)", eff: 1/3, min: 3, ft: 2, kind: "m" },
+        { id: "dp", label: "Dual parity (FT2)", eff: n => n >= 16 ? 0.8 : n >= 9 ? 0.75 : n >= 7 ? 2/3 : 0.5, min: 4, ft: 2, kind: "ec" },
+      ],
+    },
+    generic: {
+      name: "Generic", sub: "custom / lainnya", minNodes: 2,
+      ctrlCores: 4, ctrlRam: 16, hypRam: 4, diskCores: 0, diskRam: 0,
+      cacheCounts: false, fsOverhead: 5, slack: 15, drr: 1.0, rebuild: 1, azureReserve: false,
+      note: "Template netral untuk platform lain (HPE SimpliVity, StarWind, Harvester, OpenStack + Ceph, dll). Isi overhead per node dan pilih skema proteksi yang sesuai.",
+      prot: [
+        { id: "rep2", label: "2 copy / mirror (FT1)", eff: 1/2, min: 2, ft: 1, kind: "m" },
+        { id: "rep3", label: "3 copy (FT2)", eff: 1/3, min: 3, ft: 2, kind: "m" },
+        { id: "ec21", label: "Erasure coding 2+1", eff: 2/3, min: 3, ft: 1, kind: "ec" },
+        { id: "ec41", label: "Erasure coding 4+1", eff: 4/5, min: 5, ft: 1, kind: "ec" },
+        { id: "ec42", label: "Erasure coding 4+2", eff: 4/6, min: 6, ft: 2, kind: "ec" },
+        { id: "none", label: "Tanpa proteksi (lab)", eff: 1, min: 1, ft: 0, kind: "m" },
+      ],
+    },
+  };
+  const OVERRIDE_KEYS = ["ctrlCores","ctrlRam","hypRam","diskCores","diskRam","fsOverhead","slack","drr"];
+
+  const $ = id => document.getElementById(id);
+  const IDS = ["nodes","ha","rebuild","sockets","cores","ghz","ht","ram","capQty","capSize","capType","cacheQty","cacheSize","cacheType","nicPorts","nicSpeed","prot","drr","slack","fsOverhead","vcpuRatio","vcpuBasis","memRatio","util","ctrlCores","ctrlRam","hypRam","diskCores","diskRam","vmVcpu","vmRam","vmDisk","cmpLevel","cmpDrr","cmpOverhead"];
+  const STORE = "hci-sizer-v1";
+  const TAG = { crit: "KRITIS", warn: "CATATAN", ok: "OK" };
+  let brandKey = "nutanix";
+  let unit = "TiB";
+  let view = "detail";
+  let cmpSel = Object.keys(BRANDS);
+
+  const nf = (v, d = 0) => (isFinite(v) ? v : 0).toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const num = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : 0; };
+  const capNum = tb => unit === "TiB" ? tb * TB_TO_TIB : tb;
+  const fmtCap = tb => { const v = capNum(tb); return nf(v, v < 100 ? 2 : 1) + " " + unit; };
+  const fmtGB = gb => gb >= 1024 ? nf(gb / 1024, 2) + " TB" : nf(gb) + " GB";
+  const effOf = (p, n) => typeof p.eff === "function" ? p.eff(n) : p.eff;
+
+  // ---------- inputs ----------
+  function readInputs() {
+    const p = {};
+    ["nodes","sockets","cores","ghz","ram","capQty","capSize","cacheQty","cacheSize","nicPorts","drr","slack","fsOverhead","vcpuRatio","memRatio","util","ctrlCores","ctrlRam","hypRam","diskCores","diskRam","vmVcpu","vmRam","vmDisk"].forEach(k => p[k] = num(k));
+    p.ha = parseInt($("ha").value, 10);
+    p.rebuild = parseInt($("rebuild").value, 10);
+    p.ht = $("ht").checked;
+    p.capType = $("capType").value;
+    p.cacheType = $("cacheType").value;
+    p.nicSpeed = parseFloat($("nicSpeed").value);
+    p.vcpuBasis = $("vcpuBasis").value;
+    p.protId = $("prot").value;
+    return p;
+  }
+
+  // Pick the protection scheme for a comparison level, preferring schemes that fit the node count.
+  function pickProt(b, N, level) {
+    const ft = level.startsWith("ft2") ? 2 : 1;
+    const effOnly = level.endsWith("e");
+    const pool = b.prot.filter(p => p.ft === ft && (effOnly || p.kind === "m"));
+    const fit = pool.filter(p => p.min <= N);
+    const list = fit.length ? fit : pool;
+    if (!list.length) return b.prot[0];
+    return list.reduce((a, c) => effOf(c, N) > effOf(a, N) ? c : a);
+  }
+
+  // ---------- core sizing model ----------
+  function size(k, p) {
+    const b = BRANDS[k];
+    const N = Math.max(0, Math.floor(p.nodes));
+    const ha = p.ha, rb = p.rebuild;
+    const wN = Math.max(0, N - ha);
+    const util = Math.min(100, Math.max(0, p.util)) / 100;
+    const r = { k, b, N, ha, rb, util, ht: p.ht, p };
+
+    // compute
+    r.coresNode = p.sockets * p.cores;
+    r.ctrlCoresNode = p.ctrlCores + p.diskCores * p.capQty;
+    r.availCoresNode = Math.max(0, r.coresNode - r.ctrlCoresNode);
+    r.totalCores = N * r.coresNode;
+    r.ctrlCoresTot = Math.min(r.totalCores, N * r.ctrlCoresNode);
+    r.haCores = Math.min(r.totalCores - r.ctrlCoresTot, ha * r.availCoresNode);
+    r.wlCores = wN * r.availCoresNode;
+    r.utilCores = r.wlCores * util;
+    r.basisThreads = p.vcpuBasis === "thread";
+    r.vcpu = Math.floor(r.utilCores * (r.basisThreads && p.ht ? 2 : 1) * p.vcpuRatio);
+    r.ghz = r.utilCores * p.ghz;
+
+    // memory
+    r.ramNode = p.ram;
+    r.ctrlRamNode = p.ctrlRam + p.diskRam * p.capQty;
+    r.ovhRamNode = p.hypRam + r.ctrlRamNode;
+    r.availRamNode = Math.max(0, r.ramNode - r.ovhRamNode);
+    r.totalRam = N * r.ramNode;
+    r.hypTot = Math.min(r.totalRam, N * p.hypRam);
+    r.ctrlRamTot = Math.min(r.totalRam - r.hypTot, N * r.ctrlRamNode);
+    r.haRam = Math.min(r.totalRam - r.hypTot - r.ctrlRamTot, ha * r.availRamNode);
+    r.wlRam = wN * r.availRamNode;
+    r.utilRam = r.wlRam * util;
+    r.memRatio = Math.max(1, p.memRatio);
+    r.ramAlloc = r.utilRam * r.memRatio;
+
+    // storage, decimal TB
+    r.capNodeTB = p.capQty * p.capSize + (b.cacheCounts ? p.cacheQty * p.cacheSize : 0);
+    r.rawTB = N * r.capNodeTB;
+    r.fs = Math.min(100, Math.max(0, p.fsOverhead)) / 100;
+    r.fsLoss = r.rawTB * r.fs;
+    r.afterFs = r.rawTB - r.fsLoss;
+    r.azRes = b.azureReserve && p.capQty > 0 ? Math.min(r.afterFs, Math.min(N, 4) * p.capSize * (1 - r.fs)) : 0;
+    r.afterAz = r.afterFs - r.azRes;
+    r.rbLoss = Math.min(r.afterAz, rb * r.capNodeTB * (1 - r.fs));
+    r.pool = Math.max(0, r.afterAz - r.rbLoss);
+    r.prot = b.prot.find(x => x.id === p.protId) || b.prot[0];
+    r.eff = effOf(r.prot, N);
+    r.logical = r.pool * r.eff;
+    r.protLoss = r.pool - r.logical;
+    r.slack = Math.min(100, Math.max(0, p.slack)) / 100;
+    r.slackLoss = r.logical * r.slack;
+    r.usable = r.logical - r.slackLoss;
+    r.drr = Math.max(1, p.drr);
+    r.effective = r.usable * r.drr;
+    r.ratio = r.rawTB > 0 ? r.usable / r.rawTB : 0;
+
+    // VM fit
+    const vmV = Math.max(1, p.vmVcpu), vmR = Math.max(1, p.vmRam), vmD = Math.max(1, p.vmDisk);
+    r.fits = [
+      { k: "vCPU", v: Math.floor(r.vcpu / vmV) },
+      { k: "RAM", v: Math.floor(r.ramAlloc / vmR) },
+      { k: "storage", v: Math.floor(r.effective * 1000 / vmD) },
+    ];
+    r.minFit = Math.min(...r.fits.map(f => f.v));
+    r.limiter = r.fits.find(f => f.v === r.minFit).k;
+
+    // validation
+    const A = [], spd = p.nicSpeed, ports = p.nicPorts;
+    if (N < 1) A.push(["crit", "Jumlah node minimal 1."]);
+    if (N > 0 && N < b.minNodes) A.push(["crit", `${b.name} butuh minimal ${b.minNodes} node untuk cluster standar (konfigurasi 1–2 node memerlukan witness/desain khusus).`]);
+    if (N > 0 && N < r.prot.min) A.push(["crit", `${r.prot.label} butuh minimal ${r.prot.min} node. Saat ini ${N} node.`]);
+    else if (N > 0 && r.prot.min > 2 && N === r.prot.min && rb === 0) A.push(["warn", `Jumlah node sama dengan minimum ${r.prot.label}. Saat 1 node gagal, data tidak bisa di-rebuild ke node lain; tambah 1 node untuk self-healing.`]);
+    if (ha >= N && N > 0) A.push(["crit", `Reserve HA N+${ha} menghabiskan seluruh ${N} node.`]);
+    if (rb >= N && N > 0) A.push(["crit", `Reserve rebuild ${rb} node menghabiskan seluruh storage.`]);
+    if (r.coresNode > 0 && r.ctrlCoresNode >= r.coresNode) A.push(["crit", "Overhead controller melebihi jumlah core per node."]);
+    if (r.ramNode > 0 && r.ovhRamNode >= r.ramNode) A.push(["crit", "Overhead RAM melebihi kapasitas RAM per node."]);
+    else if (r.ramNode > 0 && r.ovhRamNode / r.ramNode > 0.25) A.push(["warn", `Overhead platform memakai ${nf(r.ovhRamNode / r.ramNode * 100)}% RAM per node. Pertimbangkan RAM lebih besar.`]);
+    if (p.vcpuRatio > 6) A.push(["warn", `Rasio vCPU ${nf(p.vcpuRatio, 1)}:1 cukup agresif. Umumnya 3–4:1 untuk server umum dan 1–2:1 untuk database/aplikasi kritikal.`]);
+    if (r.memRatio > 1) A.push(["warn", "Overcommit RAM > 1:1 berisiko ballooning/swap. Kebanyakan desain produksi memakai 1:1."]);
+    if (spd < 10) A.push(["crit", "1 GbE tidak cukup untuk traffic storage HCI. Minimal 10 GbE."]);
+    else if (spd < 25 && p.capType === "NVMe") A.push(["warn", "Disk NVMe dengan 10 GbE akan bottleneck di network. Disarankan 25 GbE atau lebih."]);
+    if (ports < 2) A.push(["warn", "Hanya 1 port data: tidak ada redundansi link. Gunakan minimal 2 port ke 2 switch."]);
+    if ((k === "vsan_esa" || k === "vxrail") && p.capType !== "NVMe") A.push(["crit", "vSAN ESA hanya mendukung NVMe. Untuk SSD SATA/SAS atau HDD gunakan vSAN OSA."]);
+    if (k === "vsan_osa" && p.cacheQty < 1) A.push(["crit", "vSAN OSA butuh minimal 1 disk cache per disk group."]);
+    if (k === "vsan_osa" && p.cacheQty > 0 && p.capQty / p.cacheQty > 7) A.push(["warn", "vSAN OSA: maksimal 7 disk kapasitas per disk group. Tambah disk cache."]);
+    if (p.capType === "HDD" && !b.cacheCounts && p.cacheQty < 1) A.push(["warn", "Konfigurasi hybrid HDD butuh SSD cache tier."]);
+    if (b.cacheCounts && p.cacheQty > 0 && k !== "nutanix") A.push(["warn", `${b.name} tidak memakai cache tier terpisah; disk cache dihitung sebagai kapasitas.`]);
+    if (k === "proxmox" && r.drr > 1) A.push(["warn", "Ceph RBD tidak punya dedup/kompresi bawaan di Proxmox. Set data reduction ke 1,0."]);
+    if (r.slack < 0.1 && k !== "azure") A.push(["warn", "Slack di bawah 10% berisiko performa turun dan rebuild gagal saat cluster hampir penuh."]);
+    if (N > 0 && ha === 0) A.push(["warn", "Tanpa reserve HA (N+0): VM tidak bisa restart semua saat 1 node gagal."]);
+    if (!A.length) A.push(["ok", "Desain memenuhi aturan dasar: jumlah node, proteksi, overhead, dan network."]);
+    r.alerts = A;
+    r.nCrit = A.filter(a => a[0] === "crit").length;
+    r.nWarn = A.filter(a => a[0] === "warn").length;
+    return r;
+  }
+
+  // ---------- brand cards & compare chips ----------
+  const brandsEl = $("brands"), chipsEl = $("cmpBrands");
+  Object.entries(BRANDS).forEach(([k, b]) => {
+    const d = document.createElement("div");
+    d.className = "brand";
+    d.innerHTML = `<input type="radio" name="brand" id="b_${k}" value="${k}"><label for="b_${k}"><b>${b.name}</b><span>${b.sub}</span></label>`;
+    brandsEl.appendChild(d);
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.innerHTML = `<input type="checkbox" id="c_${k}" value="${k}"><label for="c_${k}">${b.name}</label>`;
+    chipsEl.appendChild(c);
+  });
+  brandsEl.addEventListener("change", e => { if (e.target.name === "brand") { applyBrand(e.target.value, true); calc(); } });
+  chipsEl.addEventListener("change", () => {
+    cmpSel = Object.keys(BRANDS).filter(k => $("c_" + k).checked);
+    calc();
+  });
+  function syncChips() { Object.keys(BRANDS).forEach(k => $("c_" + k).checked = cmpSel.includes(k)); }
+
+  function fillProt(keepId) {
+    const b = BRANDS[brandKey], sel = $("prot");
+    sel.innerHTML = b.prot.map(p => `<option value="${p.id}">${p.label}</option>`).join("");
+    if (keepId && b.prot.some(p => p.id === keepId)) sel.value = keepId;
+  }
+  function applyBrand(k, setDefaults) {
+    brandKey = k;
+    $("b_" + k).checked = true;
+    const b = BRANDS[k];
+    $("brandNote").textContent = b.note;
+    fillProt($("prot").value);
+    if (setDefaults) {
+      OVERRIDE_KEYS.forEach(f => $(f).value = b[f]);
+      $("rebuild").value = String(b.rebuild);
+      $("prot").value = b.prot[0].id;
+    }
+  }
+
+  // ---------- waterfall ----------
+  function waterfall(el, steps, fmt) {
+    const max = Math.max(...steps.map(s => s.type === "loss" ? s.from : s.value), 1e-9);
+    el.innerHTML = steps.map(s => {
+      let left = 0, width, val;
+      if (s.type === "loss") {
+        left = Math.max(0, (s.from - s.value) / max * 100);
+        width = Math.max(0, s.value / max * 100);
+        val = s.value > 0 ? "−" + fmt(s.value) : fmt(0);
+      } else {
+        width = Math.max(0, s.value / max * 100);
+        val = fmt(s.value);
+      }
+      const strong = s.type === "result" || s.type === "gain";
+      return `<div class="lbl${strong ? " strong" : ""}">${s.label}${s.note ? `<small>${s.note}</small>` : ""}</div>
+        <div class="track"><div class="bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
+        <div class="val${s.type === "loss" && s.value > 0 ? " neg" : ""}${strong ? " strong" : ""}">${val}</div>`;
+    }).join("");
+  }
+
+  // ---------- detail view ----------
+  function renderDetail(r) {
+    const p = r.p, b = r.b;
+    $("detailBrand").textContent = b.name;
+    const cf = v => nf(v, v % 1 ? 1 : 0);
+    waterfall($("wfCpu"), [
+      { label: "Core fisik", note: `${r.N} × ${nf(r.coresNode)} core${r.ht ? " · " + nf(r.totalCores * 2) + " thread" : ""}`, type: "total", value: r.totalCores },
+      { label: "Controller / CVM", note: cf(r.ctrlCoresNode) + " core / node", type: "loss", from: r.totalCores, value: r.ctrlCoresTot },
+      { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalCores - r.ctrlCoresTot, value: r.haCores },
+      { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlCores, value: r.wlCores - r.utilCores },
+      { label: "Core untuk VM", type: "result", value: r.utilCores },
+    ], cf);
+    $("wfCpuFoot").innerHTML = `<span>× ${r.basisThreads && r.ht ? "2 thread × " : ""}rasio ${nf(p.vcpuRatio, 1)}:1</span><span><b>${nf(r.vcpu)}</b> vCPU · ${nf(r.ghz)} GHz</span>`;
+
+    waterfall($("wfRam"), [
+      { label: "RAM fisik", note: `${r.N} × ${nf(r.ramNode)} GB`, type: "total", value: r.totalRam },
+      { label: "Hypervisor", type: "loss", from: r.totalRam, value: r.hypTot },
+      { label: "Controller / CVM", note: nf(r.ctrlRamNode, 1) + " GB / node", type: "loss", from: r.totalRam - r.hypTot, value: r.ctrlRamTot },
+      { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalRam - r.hypTot - r.ctrlRamTot, value: r.haRam },
+      { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlRam, value: r.wlRam - r.utilRam },
+      { label: "RAM untuk VM", type: "result", value: r.utilRam },
+    ], fmtGB);
+    $("wfRamFoot").innerHTML = `<span>× overcommit ${nf(r.memRatio, 1)}:1</span><span><b>${fmtGB(r.ramAlloc)}</b> dapat dialokasikan</span>`;
+
+    const s = [
+      { label: "Raw capacity", note: `${r.N} node × ${nf(r.capNodeTB, 2)} TB${b.cacheCounts && p.cacheQty ? " (incl. tier)" : ""}`, type: "total", value: r.rawTB },
+      { label: "Metadata / format", note: nf(r.fs * 100, 1) + "%", type: "loss", from: r.rawTB, value: r.fsLoss },
+    ];
+    if (b.azureReserve) s.push({ label: "Reserve disk S2D", note: `${Math.min(r.N, 4)} disk`, type: "loss", from: r.afterFs, value: r.azRes });
+    s.push(
+      { label: "Reserve rebuild", note: r.rb ? `${r.rb} node` : "tidak ada", type: "loss", from: r.afterAz, value: r.rbLoss },
+      { label: "Proteksi data", note: `${r.prot.label} · ${nf(r.eff * 100, 1)}%`, type: "loss", from: r.pool, value: r.protLoss },
+      { label: "Slack / free space", note: nf(r.slack * 100) + "%", type: "loss", from: r.logical, value: r.slackLoss },
+      { label: "Usable", type: "result", value: r.usable },
+    );
+    if (r.drr > 1) s.push({ label: "Effective", note: `data reduction ${nf(r.drr, 1)}:1`, type: "gain", value: r.effective });
+    waterfall($("wfStorage"), s, fmtCap);
+    $("wfStorageFoot").innerHTML = `<span>Raw ${nf(r.rawTB, 2)} TB = ${nf(r.rawTB * TB_TO_TIB, 2)} TiB</span><span>Usable / raw <b>${nf(r.ratio * 100, 1)}%</b></span>`;
+
+    const capVal = tb => { const v = capNum(tb); return `${nf(v, v < 100 ? 2 : 1)}<small>${unit}</small>`; };
+    $("tVcpu").innerHTML = nf(r.vcpu);
+    $("tVcpuS").textContent = `${cf(r.utilCores)} core · ${nf(p.vcpuRatio, 1)}:1`;
+    $("tRam").innerHTML = r.ramAlloc >= 1024 ? `${nf(r.ramAlloc / 1024, 2)}<small>TB</small>` : `${nf(r.ramAlloc)}<small>GB</small>`;
+    $("tRamS").textContent = `N+${r.ha} · ${nf(r.util * 100)}% util`;
+    $("tUse").innerHTML = capVal(r.usable);
+    $("tUseS").textContent = `${nf(r.ratio * 100, 1)}% dari raw`;
+    $("tEff").innerHTML = capVal(r.effective);
+    $("tEffS").textContent = r.drr > 1 ? `DRR ${nf(r.drr, 1)}:1` : "tanpa data reduction";
+
+    $("vmProfile").textContent = `${nf(p.vmVcpu)} vCPU · ${nf(p.vmRam)} GB · ${nf(p.vmDisk)} GB`;
+    $("vmfit").innerHTML = r.fits.map(f => `<div class="${f.v === r.minFit ? "limit" : ""}"><div class="k">Dari ${f.k}</div><div class="v">${nf(f.v)}</div></div>`).join("");
+    $("vmtotal").innerHTML = `Cluster menampung <b>${nf(r.minFit)}</b> VM dengan profil ini. Faktor pembatas: <strong>${r.limiter}</strong>.`;
+
+    $("net").innerHTML = [
+      { k: "Bandwidth / node", v: nf(p.nicPorts * p.nicSpeed) + " Gbps" },
+      { k: "Aktif saat 1 link down", v: nf(Math.max(0, p.nicPorts - 1) * p.nicSpeed) + " Gbps" },
+      { k: "Total switch port", v: nf(r.N * p.nicPorts) + " port" },
+    ].map(x => `<div><div class="k">${x.k}</div><div class="v">${x.v}</div></div>`).join("");
+
+    const st = $("status");
+    st.className = "status " + (r.nCrit ? "crit" : r.nWarn ? "warn" : "ok");
+    st.textContent = r.nCrit ? `${r.nCrit} kritis` : r.nWarn ? `${r.nWarn} catatan` : "OK";
+    $("alerts").innerHTML = r.alerts.map(([t, m]) => `<div class="alert ${t}"><span class="tag">${TAG[t]}</span><span>${m}</span></div>`).join("");
+  }
+
+  // ---------- compare view ----------
+  function compareResults(base) {
+    const level = $("cmpLevel").value;
+    const useInputDrr = $("cmpDrr").value === "input";
+    const useInputOvh = $("cmpOverhead").value === "input";
+    return cmpSel.map(k => {
+      const b = BRANDS[k], p = { ...base };
+      if (!useInputOvh) { OVERRIDE_KEYS.forEach(f => { if (f !== "drr") p[f] = b[f]; }); p.rebuild = b.rebuild; }
+      p.drr = useInputDrr ? base.drr : b.drr;
+      p.protId = pickProt(b, Math.floor(base.nodes), level).id;
+      return size(k, p);
+    });
+  }
+
+  function renderCompare(rows, base) {
+    $("cmpSpec").textContent = `${Math.floor(base.nodes)} node · ${base.sockets}×${base.cores}c · ${nf(base.ram)} GB · ${base.capQty}×${base.capSize} TB`;
+    if (!rows.length) {
+      $("cmpTable").innerHTML = `<tbody><tr><td>Pilih minimal satu brand di atas untuk dibandingkan.</td></tr></tbody>`;
+      $("cmpIssues").innerHTML = "";
+      return;
+    }
+    const cols = [
+      { h: "vCPU", get: r => r.vcpu, fmt: r => nf(r.vcpu), sub: r => `${nf(r.utilCores, r.utilCores % 1 ? 1 : 0)} core` },
+      { h: "RAM VM", get: r => r.ramAlloc, fmt: r => fmtGB(r.ramAlloc), sub: r => `overhead ${nf(r.ovhRamNode)} GB/node` },
+      { h: "Usable", get: r => r.usable, fmt: r => fmtCap(r.usable), sub: r => `${nf(r.ratio * 100, 1)}% raw`, bar: true },
+      { h: "Effective", get: r => r.effective, fmt: r => fmtCap(r.effective), sub: r => `DRR ${nf(r.drr, 1)}:1` },
+      { h: "Jumlah VM", get: r => r.minFit, fmt: r => nf(r.minFit), sub: r => `batas: ${r.limiter}` },
+    ];
+    const valid = rows.filter(r => r.nCrit === 0);
+    const bestPool = valid.length ? valid : rows;
+    cols.forEach(c => c.best = Math.max(...bestPool.map(c.get)));
+    const maxUse = Math.max(...rows.map(r => r.usable), 1e-9);
+
+    const head = `<thead><tr><th>Brand · proteksi</th>${cols.map(c => `<th>${c.h}</th>`).join("")}<th>Status</th><th></th></tr></thead>`;
+    const body = rows.map(r => {
+      const st = r.nCrit ? `<span class="status crit">${r.nCrit} kritis</span>` : r.nWarn ? `<span class="status warn">${r.nWarn} catatan</span>` : `<span class="status ok">OK</span>`;
+      const cells = cols.map(c => {
+        const best = r.nCrit === 0 && c.get(r) === c.best && c.best > 0;
+        const bar = c.bar ? `<div class="mini"><span style="width:${r.usable / maxUse * 100}%"></span></div>` : "";
+        return `<td class="${best ? "best" : ""}">${c.fmt(r)}<span class="sub">${c.sub(r)}</span>${bar}</td>`;
+      }).join("");
+      return `<tr class="${r.k === brandKey ? "active" : ""}"><td><b>${r.b.name}</b><small>${r.prot.label} · ${nf(r.eff * 100, 1)}%</small><small>CVM ${nf(r.ctrlCoresNode, r.ctrlCoresNode % 1 ? 1 : 0)}c / ${nf(r.ctrlRamNode)} GB · slack ${nf(r.slack * 100)}%</small></td>${cells}<td>${st}</td><td><button type="button" class="go" data-go="${r.k}">Detail</button></td></tr>`;
+    }).join("");
+    $("cmpTable").innerHTML = head + `<tbody>${body}</tbody>`;
+
+    const issues = rows.filter(r => r.nCrit || r.nWarn);
+    $("cmpIssues").innerHTML = issues.length
+      ? issues.map(r => `<div><h3>${r.b.name}</h3><div class="alerts">${r.alerts.filter(a => a[0] !== "ok").map(([t, m]) => `<div class="alert ${t}"><span class="tag">${TAG[t]}</span><span>${m}</span></div>`).join("")}</div></div>`).join("")
+      : `<div class="alert ok"><span class="tag">OK</span><span>Semua brand yang dibandingkan lolos aturan dasar untuk spesifikasi ini.</span></div>`;
+  }
+  $("cmpTable").addEventListener("click", e => {
+    const k = e.target.closest("[data-go]")?.dataset.go;
+    if (!k) return;
+    applyBrand(k, true);
+    setView("detail");
+    calc();
+    toast(`${BRANDS[k].name} dipilih dengan nilai default`);
+  });
+
+  // ---------- main ----------
+  let lastSummary = "";
+  function calc() {
+    const base = readInputs();
+    const r = size(brandKey, base);
+    renderDetail(r);
+    let rows = [];
+    if (view === "compare") { rows = compareResults(base); renderCompare(rows, base); }
+    lastSummary = view === "compare" ? compareSummary(rows, base) : detailSummary(r);
+    save();
+  }
+
+  function detailSummary(r) {
+    const p = r.p;
+    return [
+      `HCI Sizing · ${r.b.name}`,
+      `Cluster: ${r.N} node, HA N+${r.ha}, reserve rebuild ${r.rb} node`,
+      `Per node: ${p.sockets}×${p.cores} core @ ${p.ghz} GHz${p.ht ? " (HT)" : ""}, ${nf(p.ram)} GB RAM, ${p.capQty}× ${p.capSize} TB ${p.capType}${p.cacheQty ? ` + ${p.cacheQty}× ${p.cacheSize} TB ${p.cacheType} cache` : ""}, ${p.nicPorts}× ${p.nicSpeed} GbE`,
+      ``,
+      `COMPUTE: ${nf(r.totalCores)} core fisik → ${nf(r.utilCores, 1)} core untuk VM → ${nf(r.vcpu)} vCPU (rasio ${p.vcpuRatio}:1, util ${nf(r.util * 100)}%)`,
+      `MEMORI : ${fmtGB(r.totalRam)} fisik → ${fmtGB(r.utilRam)} untuk VM → ${fmtGB(r.ramAlloc)} dapat dialokasikan`,
+      `STORAGE: raw ${nf(r.rawTB, 2)} TB (${nf(r.rawTB * TB_TO_TIB, 2)} TiB)`,
+      `         proteksi ${r.prot.label} (${nf(r.eff * 100, 1)}%), slack ${nf(r.slack * 100)}%, metadata ${nf(r.fs * 100, 1)}%`,
+      `         usable ${fmtCap(r.usable)} · effective ${fmtCap(r.effective)} (DRR ${nf(r.drr, 1)}:1)`,
+      `VM ${p.vmVcpu} vCPU/${p.vmRam} GB/${p.vmDisk} GB: ${nf(r.minFit)} VM (pembatas: ${r.limiter})`,
+      ``,
+      `Validasi: ${r.alerts.map(a => `[${TAG[a[0]]}] ${a[1]}`).join("\n          ")}`,
+    ].join("\n");
+  }
+  function compareSummary(rows, p) {
+    const lvl = $("cmpLevel").selectedOptions[0].textContent;
+    const pad = (s, n) => String(s).padEnd(n);
+    return [
+      `HCI Sizing · Perbandingan brand (${lvl})`,
+      `Spec: ${Math.floor(p.nodes)} node · ${p.sockets}×${p.cores} core @ ${p.ghz} GHz · ${nf(p.ram)} GB · ${p.capQty}× ${p.capSize} TB ${p.capType} · HA N+${p.ha} · vCPU ${p.vcpuRatio}:1`,
+      ``,
+      pad("Brand", 18) + pad("Proteksi", 26) + pad("vCPU", 8) + pad("RAM VM", 11) + pad("Usable", 13) + pad("Effective", 13) + pad("VM", 7) + "Status",
+      ...rows.map(r => pad(r.b.name, 18) + pad(r.prot.label, 26) + pad(nf(r.vcpu), 8) + pad(fmtGB(r.ramAlloc), 11) + pad(fmtCap(r.usable), 13) + pad(fmtCap(r.effective), 13) + pad(nf(r.minFit), 7) + (r.nCrit ? `${r.nCrit} kritis` : r.nWarn ? `${r.nWarn} catatan` : "OK")),
+    ].join("\n");
+  }
+
+  // ---------- view & unit ----------
+  function setView(v) {
+    view = v;
+    $("viewDetail").hidden = v !== "detail";
+    $("viewCompare").hidden = v !== "compare";
+    document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+  }
+  document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.view); calc(); }));
+  function setUnit(u) {
+    unit = u;
+    document.querySelectorAll("[data-unit]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.unit === u)));
+  }
+  document.querySelectorAll("[data-unit]").forEach(b => b.addEventListener("click", () => { setUnit(b.dataset.unit); calc(); }));
+
+  // ---------- persistence ----------
+  function save() {
+    try {
+      const s = { brand: brandKey, unit, view, cmpSel };
+      IDS.forEach(id => s[id] = $(id).type === "checkbox" ? $(id).checked : $(id).value);
+      localStorage.setItem(STORE, JSON.stringify(s));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (!s || !BRANDS[s.brand]) return false;
+      applyBrand(s.brand, false);
+      IDS.forEach(id => { if (id in s) { if ($(id).type === "checkbox") $(id).checked = !!s[id]; else $(id).value = s[id]; } });
+      if (s.unit) setUnit(s.unit);
+      if (Array.isArray(s.cmpSel)) cmpSel = s.cmpSel.filter(k => BRANDS[k]);
+      if (s.view) setView(s.view);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // ---------- actions ----------
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 1800);
+  }
+  $("btnCopy").addEventListener("click", () => {
+    const fallback = () => {
+      let box = document.querySelector(".copybox");
+      if (!box) {
+        box = document.createElement("textarea"); box.className = "copybox"; box.readOnly = true;
+        $("readout").appendChild(box);
+      }
+      box.value = lastSummary; box.focus(); box.select();
+      toast("Teks dipilih. Tekan Ctrl+C untuk menyalin.");
+    };
+    try {
+      navigator.clipboard.writeText(lastSummary).then(() => toast("Ringkasan disalin"), fallback);
+    } catch (e) { fallback(); }
+  });
+  $("btnReset").addEventListener("click", () => { applyBrand(brandKey, true); calc(); toast(`Default ${BRANDS[brandKey].name} diterapkan`); });
+
+  $("form").addEventListener("input", calc);
+  $("form").addEventListener("change", calc);
+  $("viewCompare").addEventListener("change", e => { if (e.target.tagName === "SELECT") calc(); });
+
+  if (!load()) applyBrand("nutanix", true);
+  if (location.hash === "#compare") setView("compare");
+  syncChips();
+  calc();
+})();
+</script>
+</body>
+</html>
