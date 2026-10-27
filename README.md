@@ -2,7 +2,7 @@
 
 Kalkulator sizing Hyper-Converged Infrastructure (HCI) untuk vCPU, memori, dan storage, dari raw capacity hingga usable dan effective.
 
-**Live:** https://fadliramm.github.io/hci-sizer/
+**Live:** https://fadliramm.github.io/HCI-Sizer/
 
 ## Fitur
 - Preset brand: Nutanix, VMware vSAN ESA/OSA, Dell VxRail, Sangfor HCI, Proxmox VE + Ceph, Microsoft Azure Local, Generic
