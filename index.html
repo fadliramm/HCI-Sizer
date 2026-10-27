@@ -1010,7 +1010,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
   const rd = (v, d = 2) => Math.round((isFinite(v) ? v : 0) * Math.pow(10, d)) / Math.pow(10, d);
   const signed = s => s.type === "loss" ? -s.value : s.value;
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const statusText = r => r.nCrit ? `${r.nCrit} kritis` : r.nWarn ? `${r.nWarn} catatan` : "OK";
 
   function reportData() {
