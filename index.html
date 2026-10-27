@@ -10,6 +10,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 /* Layout: rack-style two-pane tool. Spec sheet (inputs) left, live readout (detail or brand comparison) right & sticky. */
 :root {
@@ -83,6 +86,20 @@ button, .btn {
 }
 button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.menu { position: relative; }
+.menu summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary:hover, .menu[open] summary { border-color: var(--accent); }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 270px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 28px rgb(10 20 35 / 0.16);
+}
+@media (max-width: 620px) { .menu-list { left: 0; right: auto; } }
+.menu-list button { border: 0; background: transparent; text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; line-height: 1.2; }
+.menu-list button:hover { background: var(--accent-soft); }
+.menu-list b { font-weight: 600; }
+.menu-list span { font-size: 11.5px; color: var(--muted); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
@@ -237,6 +254,13 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       <p>Hitung kapasitas vCPU, memori, dan storage cluster Hyper-Converged dari raw hingga usable, lalu bandingkan hasilnya antar brand untuk spesifikasi hardware yang sama.</p>
     </div>
     <div class="top-actions">
+      <details class="menu" id="expMenu">
+        <summary class="btn">Export <span aria-hidden="true">▾</span></summary>
+        <div class="menu-list" role="menu">
+          <button type="button" role="menuitem" id="expPdf"><b>PDF</b><span>Laporan sizing lengkap + perbandingan brand</span></button>
+          <button type="button" role="menuitem" id="expXlsx"><b>Excel (.xlsx)</b><span>Ringkasan, waterfall, perbandingan, validasi</span></button>
+        </div>
+      </details>
       <button type="button" id="btnReset">Reset ke default brand</button>
       <button type="button" id="btnCopy" class="primary">Salin ringkasan</button>
     </div>
@@ -754,30 +778,25 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     }).join("");
   }
 
-  // ---------- detail view ----------
-  function renderDetail(r) {
+  // ---------- step lists (shared by the waterfalls and the exports) ----------
+  const cf = v => nf(v, v % 1 ? 1 : 0);
+  const stepsCpu = r => [
+    { label: "Core fisik", note: `${r.N} × ${nf(r.coresNode)} core${r.ht ? " · " + nf(r.totalCores * 2) + " thread" : ""}`, type: "total", value: r.totalCores },
+    { label: "Controller / CVM", note: cf(r.ctrlCoresNode) + " core / node", type: "loss", from: r.totalCores, value: r.ctrlCoresTot },
+    { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalCores - r.ctrlCoresTot, value: r.haCores },
+    { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlCores, value: r.wlCores - r.utilCores },
+    { label: "Core untuk VM", type: "result", value: r.utilCores },
+  ];
+  const stepsRam = r => [
+    { label: "RAM fisik", note: `${r.N} × ${nf(r.ramNode)} GB`, type: "total", value: r.totalRam },
+    { label: "Hypervisor", type: "loss", from: r.totalRam, value: r.hypTot },
+    { label: "Controller / CVM", note: nf(r.ctrlRamNode, 1) + " GB / node", type: "loss", from: r.totalRam - r.hypTot, value: r.ctrlRamTot },
+    { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalRam - r.hypTot - r.ctrlRamTot, value: r.haRam },
+    { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlRam, value: r.wlRam - r.utilRam },
+    { label: "RAM untuk VM", type: "result", value: r.utilRam },
+  ];
+  function stepsStorage(r) {
     const p = r.p, b = r.b;
-    $("detailBrand").textContent = b.name;
-    const cf = v => nf(v, v % 1 ? 1 : 0);
-    waterfall($("wfCpu"), [
-      { label: "Core fisik", note: `${r.N} × ${nf(r.coresNode)} core${r.ht ? " · " + nf(r.totalCores * 2) + " thread" : ""}`, type: "total", value: r.totalCores },
-      { label: "Controller / CVM", note: cf(r.ctrlCoresNode) + " core / node", type: "loss", from: r.totalCores, value: r.ctrlCoresTot },
-      { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalCores - r.ctrlCoresTot, value: r.haCores },
-      { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlCores, value: r.wlCores - r.utilCores },
-      { label: "Core untuk VM", type: "result", value: r.utilCores },
-    ], cf);
-    $("wfCpuFoot").innerHTML = `<span>× ${r.basisThreads && r.ht ? "2 thread × " : ""}rasio ${nf(p.vcpuRatio, 1)}:1</span><span><b>${nf(r.vcpu)}</b> vCPU · ${nf(r.ghz)} GHz</span>`;
-
-    waterfall($("wfRam"), [
-      { label: "RAM fisik", note: `${r.N} × ${nf(r.ramNode)} GB`, type: "total", value: r.totalRam },
-      { label: "Hypervisor", type: "loss", from: r.totalRam, value: r.hypTot },
-      { label: "Controller / CVM", note: nf(r.ctrlRamNode, 1) + " GB / node", type: "loss", from: r.totalRam - r.hypTot, value: r.ctrlRamTot },
-      { label: `Reserve HA N+${r.ha}`, type: "loss", from: r.totalRam - r.hypTot - r.ctrlRamTot, value: r.haRam },
-      { label: `Batas utilisasi ${nf(r.util * 100)}%`, type: "loss", from: r.wlRam, value: r.wlRam - r.utilRam },
-      { label: "RAM untuk VM", type: "result", value: r.utilRam },
-    ], fmtGB);
-    $("wfRamFoot").innerHTML = `<span>× overcommit ${nf(r.memRatio, 1)}:1</span><span><b>${fmtGB(r.ramAlloc)}</b> dapat dialokasikan</span>`;
-
     const s = [
       { label: "Raw capacity", note: `${r.N} node × ${nf(r.capNodeTB, 2)} TB${b.cacheCounts && p.cacheQty ? " (incl. tier)" : ""}`, type: "total", value: r.rawTB },
       { label: "Metadata / format", note: nf(r.fs * 100, 1) + "%", type: "loss", from: r.rawTB, value: r.fsLoss },
@@ -790,7 +809,20 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       { label: "Usable", type: "result", value: r.usable },
     );
     if (r.drr > 1) s.push({ label: "Effective", note: `data reduction ${nf(r.drr, 1)}:1`, type: "gain", value: r.effective });
-    waterfall($("wfStorage"), s, fmtCap);
+    return s;
+  }
+
+  // ---------- detail view ----------
+  function renderDetail(r) {
+    const p = r.p, b = r.b;
+    $("detailBrand").textContent = b.name;
+    waterfall($("wfCpu"), stepsCpu(r), cf);
+    $("wfCpuFoot").innerHTML = `<span>× ${r.basisThreads && r.ht ? "2 thread × " : ""}rasio ${nf(p.vcpuRatio, 1)}:1</span><span><b>${nf(r.vcpu)}</b> vCPU · ${nf(r.ghz)} GHz</span>`;
+
+    waterfall($("wfRam"), stepsRam(r), fmtGB);
+    $("wfRamFoot").innerHTML = `<span>× overcommit ${nf(r.memRatio, 1)}:1</span><span><b>${fmtGB(r.ramAlloc)}</b> dapat dialokasikan</span>`;
+
+    waterfall($("wfStorage"), stepsStorage(r), fmtCap);
     $("wfStorageFoot").innerHTML = `<span>Raw ${nf(r.rawTB, 2)} TB = ${nf(r.rawTB * TB_TO_TIB, 2)} TiB</span><span>Usable / raw <b>${nf(r.ratio * 100, 1)}%</b></span>`;
 
     const capVal = tb => { const v = capNum(tb); return `${nf(v, v < 100 ? 2 : 1)}<small>${unit}</small>`; };
@@ -820,11 +852,11 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   }
 
   // ---------- compare view ----------
-  function compareResults(base) {
+  function compareResults(base, list = cmpSel) {
     const level = $("cmpLevel").value;
     const useInputDrr = $("cmpDrr").value === "input";
     const useInputOvh = $("cmpOverhead").value === "input";
-    return cmpSel.map(k => {
+    return list.map(k => {
       const b = BRANDS[k], p = { ...base };
       if (!useInputOvh) { OVERRIDE_KEYS.forEach(f => { if (f !== "drr") p[f] = b[f]; }); p.rebuild = b.rebuild; }
       p.drr = useInputDrr ? base.drr : b.drr;
@@ -957,7 +989,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   // ---------- actions ----------
   function toast(msg) {
     const t = $("toast"); t.textContent = msg; t.hidden = false;
-    clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 1800);
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, msg.length > 60 ? 5000 : 1800);
   }
   $("btnCopy").addEventListener("click", () => {
     const fallback = () => {
@@ -973,6 +1005,231 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       navigator.clipboard.writeText(lastSummary).then(() => toast("Ringkasan disalin"), fallback);
     } catch (e) { fallback(); }
   });
+  // ---------- export (PDF & Excel) ----------
+  const PAGES_URL = "https://fadliramm.github.io/HCI-Sizer/";
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  const rd = (v, d = 2) => Math.round((isFinite(v) ? v : 0) * Math.pow(10, d)) / Math.pow(10, d);
+  const signed = s => s.type === "loss" ? -s.value : s.value;
+  const today = () => new Date().toISOString().slice(0, 10);
+  const statusText = r => r.nCrit ? `${r.nCrit} kritis` : r.nWarn ? `${r.nWarn} catatan` : "OK";
+
+  function reportData() {
+    const base = readInputs();
+    const r = size(brandKey, base);
+    const rows = compareResults(base, cmpSel.length ? cmpSel : Object.keys(BRANDS));
+    return { base, r, rows };
+  }
+  function fileName(r, ext) {
+    const slug = r.b.name.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return `HCI-Sizing_${slug}_${r.N}node_${today()}.${ext}`;
+  }
+  function specRows(r) {
+    const p = r.p;
+    return [
+      ["Platform", r.b.name],
+      ["Jumlah node", `${r.N} node`],
+      ["Reserve HA compute", `N+${r.ha}`],
+      ["Reserve rebuild storage", r.rb ? `${r.rb} node` : "tidak ada"],
+      ["CPU per node", `${p.sockets} × ${p.cores} core @ ${p.ghz} GHz${p.ht ? " (HT/SMT)" : ""}`],
+      ["RAM per node", `${nf(p.ram)} GB`],
+      ["Disk kapasitas per node", `${p.capQty} × ${p.capSize} TB ${p.capType}`],
+      ["Disk cache per node", p.cacheQty ? `${p.cacheQty} × ${p.cacheSize} TB ${p.cacheType}${r.b.cacheCounts ? " (dihitung kapasitas)" : ""}` : "tidak ada"],
+      ["Network per node", `${p.nicPorts} × ${p.nicSpeed} GbE`],
+      ["Proteksi data", `${r.prot.label} (efisiensi ${nf(r.eff * 100, 1)}%)`],
+      ["Data reduction", `${nf(r.drr, 1)} : 1`],
+      ["Slack / free space", `${nf(r.slack * 100)}%`],
+      ["Overhead metadata", `${nf(r.fs * 100, 1)}%`],
+      ["Rasio vCPU", `${nf(p.vcpuRatio, 1)} : 1 (basis ${p.vcpuBasis === "thread" ? "thread" : "core fisik"})`],
+      ["Overcommit RAM", `${nf(r.memRatio, 1)} : 1`],
+      ["Batas utilisasi CPU & RAM", `${nf(r.util * 100)}%`],
+      ["Overhead controller / CVM per node", `${cf(r.ctrlCoresNode)} core · ${nf(r.ctrlRamNode, 1)} GB`],
+      ["RAM hypervisor per node", `${nf(p.hypRam)} GB`],
+      ["Profil VM referensi", `${p.vmVcpu} vCPU · ${p.vmRam} GB RAM · ${p.vmDisk} GB disk`],
+    ];
+  }
+  function afterExport(kind) {
+    toast(inFrame ? `Jika ${kind} tidak terunduh, buka ${PAGES_URL} untuk export.` : `${kind} diunduh`);
+  }
+
+  function exportXlsx() {
+    if (!window.XLSX) { toast("Library Excel belum termuat. Periksa koneksi internet lalu coba lagi."); return; }
+    const { r, rows } = reportData();
+    const wb = XLSX.utils.book_new();
+    const add = (name, aoa, widths) => {
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = widths.map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    };
+
+    add("Ringkasan", [
+      ["HCI Sizing Report"],
+      ["Dibuat", today()],
+      [],
+      ["SPESIFIKASI & KEBIJAKAN", "Nilai"],
+      ...specRows(r),
+      [],
+      ["HASIL", "Nilai", "Satuan"],
+      ["vCPU tersedia", r.vcpu, "vCPU"],
+      ["Core untuk VM", rd(r.utilCores, 1), "core"],
+      ["Clock tersedia", rd(r.ghz, 1), "GHz"],
+      ["RAM untuk VM", rd(r.utilRam), "GB"],
+      ["RAM dapat dialokasikan", rd(r.ramAlloc), "GB"],
+      ["Raw capacity", rd(r.rawTB), "TB"],
+      ["Raw capacity", rd(r.rawTB * TB_TO_TIB), "TiB"],
+      ["Usable", rd(r.usable), "TB"],
+      ["Usable", rd(r.usable * TB_TO_TIB), "TiB"],
+      ["Effective", rd(r.effective), "TB"],
+      ["Effective", rd(r.effective * TB_TO_TIB), "TiB"],
+      ["Usable / raw", rd(r.ratio * 100, 1), "%"],
+      ["Jumlah VM (profil referensi)", r.minFit, `VM, pembatas: ${r.limiter}`],
+      ["Status validasi", statusText(r)],
+    ], [36, 48, 22]);
+
+    add("Storage", [
+      ["Tahap", "Keterangan", "TB", "TiB"],
+      ...stepsStorage(r).map(s => [s.label, s.note || "", rd(signed(s)), rd(signed(s) * TB_TO_TIB)]),
+    ], [24, 40, 12, 12]);
+
+    add("Compute", [
+      ["Tahap", "Keterangan", "Core"],
+      ...stepsCpu(r).map(s => [s.label, s.note || "", rd(signed(s), 1)]),
+      [],
+      ["vCPU tersedia", `rasio ${nf(r.p.vcpuRatio, 1)}:1${r.basisThreads && r.ht ? " × 2 thread" : ""}`, r.vcpu],
+      ["Clock tersedia (GHz)", "", rd(r.ghz, 1)],
+    ], [24, 32, 12]);
+
+    add("Memori", [
+      ["Tahap", "Keterangan", "GB"],
+      ...stepsRam(r).map(s => [s.label, s.note || "", rd(signed(s))]),
+      [],
+      ["RAM dapat dialokasikan", `overcommit ${nf(r.memRatio, 1)}:1`, rd(r.ramAlloc)],
+    ], [24, 28, 12]);
+
+    add("Perbandingan", [
+      [`Perbandingan brand · ${$("cmpLevel").selectedOptions[0].textContent} · data reduction: ${$("cmpDrr").selectedOptions[0].textContent} · overhead: ${$("cmpOverhead").selectedOptions[0].textContent}`],
+      ["Brand", "Proteksi", "Efisiensi %", "CVM core/node", "CVM RAM/node (GB)", "Slack %", "vCPU", "RAM VM (GB)", "Raw (TB)", "Usable (TB)", "Usable (TiB)", "Effective (TiB)", "Usable/raw %", "Jumlah VM", "Pembatas", "Status"],
+      ...rows.map(x => [x.b.name, x.prot.label, rd(x.eff * 100, 1), rd(x.ctrlCoresNode, 1), rd(x.ctrlRamNode, 1), rd(x.slack * 100), x.vcpu, rd(x.ramAlloc), rd(x.rawTB), rd(x.usable), rd(x.usable * TB_TO_TIB), rd(x.effective * TB_TO_TIB), rd(x.ratio * 100, 1), x.minFit, x.limiter, statusText(x)]),
+    ], [18, 26, 10, 12, 16, 8, 8, 12, 10, 11, 11, 13, 12, 10, 10, 12]);
+
+    add("Validasi", [
+      ["Brand", "Level", "Pesan"],
+      ...r.alerts.map(a => [`${r.b.name} (konfigurasi form)`, TAG[a[0]], a[1]]),
+      ...rows.flatMap(x => x.alerts.map(a => [`${x.b.name} (perbandingan)`, TAG[a[0]], a[1]])),
+    ], [30, 10, 100]);
+
+    XLSX.writeFile(wb, fileName(r, "xlsx"));
+    afterExport("Excel");
+  }
+
+  function exportPdf() {
+    const J = window.jspdf && window.jspdf.jsPDF;
+    if (!J || !J.API.autoTable) { toast("Library PDF belum termuat. Periksa koneksi internet lalu coba lagi."); return; }
+    const { r, rows } = reportData();
+    const doc = new J({ unit: "mm", format: "a4" });
+    const M = 14, INK = [19, 26, 34], MUTED = [90, 102, 117], ACC = [28, 88, 209], LINE = [211, 217, 224];
+    const LVL = { KRITIS: [191, 52, 40], CATATAN: [168, 99, 0], OK: [29, 122, 78] };
+    // Standard PDF fonts only cover Latin-1; map the few symbols outside it.
+    const T = s => String(s).replace(/−/g, "-").replace(/→/g, "->").replace(/[–—]/g, "-").replace(/≥/g, ">=").replace(/[^\x00-\xFF]/g, "");
+    const pw = () => doc.internal.pageSize.getWidth();
+    let y = 18;
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...INK);
+    doc.text("HCI Sizing Report", M, y);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
+    doc.text(T(`${r.b.name} · ${r.N} node · ${r.prot.label} · dibuat ${today()}`), M, y + 6);
+    doc.setDrawColor(...ACC); doc.setLineWidth(0.6); doc.line(M, y + 9, pw() - M, y + 9);
+    y += 15;
+
+    const kpi = [
+      ["vCPU tersedia", nf(r.vcpu), `${cf(r.utilCores)} core · ${nf(r.p.vcpuRatio, 1)}:1`],
+      ["RAM untuk VM", fmtGB(r.ramAlloc), `N+${r.ha} · util ${nf(r.util * 100)}%`],
+      ["Usable storage", fmtCap(r.usable), `${nf(r.ratio * 100, 1)}% dari raw`],
+      ["Effective", fmtCap(r.effective), `DRR ${nf(r.drr, 1)}:1`],
+    ];
+    const gap = 3, bw = (pw() - 2 * M - gap * 3) / 4;
+    kpi.forEach(([k, v, s], i) => {
+      const x = M + i * (bw + gap);
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.roundedRect(x, y, bw, 19, 1.5, 1.5);
+      doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.text(T(k.toUpperCase()), x + 3, y + 5);
+      doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(...(i < 3 ? ACC : INK)); doc.text(T(v), x + 3, y + 12);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.text(T(s), x + 3, y + 16.5);
+    });
+    y += 27;
+
+    const section = (title, head, body, opts = {}) => {
+      if (y > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); y = 18; }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(11.5); doc.setTextColor(...INK);
+      doc.text(T(title), M, y);
+      doc.autoTable({
+        startY: y + 2.5,
+        head: head ? [head.map(T)] : undefined,
+        body: body.map(row => row.map(c => T(c))),
+        margin: { left: M, right: M, bottom: 16 },
+        theme: "grid",
+        styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.6, textColor: INK, lineColor: LINE, lineWidth: 0.2 },
+        headStyles: { fillColor: [236, 239, 242], textColor: INK, fontStyle: "bold" },
+        ...opts,
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    };
+    const right = cols => Object.fromEntries(cols.map(c => [c, { halign: "right" }]));
+    const boldResult = steps => ({ didParseCell: d => { if (d.section === "body" && steps[d.row.index] && steps[d.row.index].type !== "loss" && steps[d.row.index].type !== "total") d.cell.styles.fontStyle = "bold"; } });
+    const capCell = v => (v < 0 ? "-" : "") + fmtCap(Math.abs(v));
+
+    section("Spesifikasi & kebijakan", null, specRows(r), { columnStyles: { 0: { cellWidth: 62, textColor: MUTED } } });
+
+    const ss = stepsStorage(r);
+    section(`Storage: raw -> usable (${unit})`, ["Tahap", "Keterangan", unit], ss.map(s => [s.label, s.note || "", capCell(signed(s))]), { columnStyles: right([2]), ...boldResult(ss) });
+
+    const sc = stepsCpu(r);
+    section("Compute (core fisik)", ["Tahap", "Keterangan", "Core"],
+      [...sc.map(s => [s.label, s.note || "", (s.type === "loss" && s.value > 0 ? "-" : "") + cf(s.value)]),
+       ["vCPU tersedia", `rasio ${nf(r.p.vcpuRatio, 1)}:1${r.basisThreads && r.ht ? " × 2 thread" : ""} · ${nf(r.ghz)} GHz`, nf(r.vcpu)]],
+      { columnStyles: right([2]), ...boldResult([...sc, { type: "result" }]) });
+
+    const sr = stepsRam(r);
+    section("Memori", ["Tahap", "Keterangan", "Kapasitas"],
+      [...sr.map(s => [s.label, s.note || "", (s.type === "loss" && s.value > 0 ? "-" : "") + fmtGB(s.value)]),
+       ["RAM dapat dialokasikan", `overcommit ${nf(r.memRatio, 1)}:1`, fmtGB(r.ramAlloc)]],
+      { columnStyles: right([2]), ...boldResult([...sr, { type: "result" }]) });
+
+    section(`Kapasitas VM (${r.p.vmVcpu} vCPU · ${r.p.vmRam} GB · ${r.p.vmDisk} GB)`, ["Berdasarkan", "Jumlah VM"],
+      [...r.fits.map(f => [f.k, nf(f.v)]), [`Total (pembatas: ${r.limiter})`, nf(r.minFit)]],
+      { columnStyles: right([1]), didParseCell: d => { if (d.section === "body" && d.row.index === r.fits.length) d.cell.styles.fontStyle = "bold"; } });
+
+    const lvlColor = d => { if (d.section === "body" && d.column.index === 0 && LVL[d.cell.raw]) { d.cell.styles.textColor = LVL[d.cell.raw]; d.cell.styles.fontStyle = "bold"; } };
+    section("Validasi desain", ["Level", "Pesan"], r.alerts.map(a => [TAG[a[0]], a[1]]), { columnStyles: { 0: { cellWidth: 22 } }, didParseCell: lvlColor });
+
+    // Brand comparison on its own landscape page
+    doc.addPage("a4", "landscape"); y = 18;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTED);
+    doc.text(T(`Spesifikasi hardware sama untuk semua brand · ${$("cmpLevel").selectedOptions[0].textContent} · data reduction: ${$("cmpDrr").selectedOptions[0].textContent} · overhead: ${$("cmpOverhead").selectedOptions[0].textContent}`), M, y + 5);
+    section("Perbandingan brand", ["Brand", "Proteksi", "Efisiensi", "CVM / node", "Slack", "vCPU", "RAM VM", `Raw (${unit})`, `Usable (${unit})`, `Effective (${unit})`, "% raw", "VM", "Status"],
+      rows.map(x => [x.b.name, x.prot.label, nf(x.eff * 100, 1) + "%", `${cf(x.ctrlCoresNode)}c / ${nf(x.ctrlRamNode)} GB`, nf(x.slack * 100) + "%", nf(x.vcpu), fmtGB(x.ramAlloc), fmtCap(x.rawTB), fmtCap(x.usable), fmtCap(x.effective), nf(x.ratio * 100, 1) + "%", nf(x.minFit), statusText(x)]),
+      { startY: y + 8, styles: { font: "helvetica", fontSize: 8, cellPadding: 1.5, textColor: INK, lineColor: LINE, lineWidth: 0.2 }, columnStyles: right([2, 4, 5, 6, 7, 8, 9, 10, 11]),
+        didParseCell: d => { if (d.section === "body" && rows[d.row.index].k === brandKey) d.cell.styles.fillColor = [226, 234, 250]; if (d.section === "body" && d.column.index === 12) d.cell.styles.textColor = rows[d.row.index].nCrit ? LVL.KRITIS : rows[d.row.index].nWarn ? LVL.CATATAN : LVL.OK; } });
+
+    const issues = rows.flatMap(x => x.alerts.filter(a => a[0] !== "ok").map(a => [x.b.name, TAG[a[0]], a[1]]));
+    if (issues.length) section("Isu desain per brand", ["Brand", "Level", "Pesan"], issues, { columnStyles: { 0: { cellWidth: 36 }, 1: { cellWidth: 22 } }, didParseCell: d => { if (d.section === "body" && d.column.index === 1 && LVL[d.cell.raw]) { d.cell.styles.textColor = LVL[d.cell.raw]; d.cell.styles.fontStyle = "bold"; } } });
+
+    const n = doc.getNumberOfPages();
+    for (let i = 1; i <= n; i++) {
+      doc.setPage(i);
+      const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
+      doc.text(T("Estimasi berdasarkan nilai default umum per brand. Validasi dengan sizer resmi vendor untuk proposal final. · HCI Sizer"), M, h - 8);
+      doc.text(`Halaman ${i} / ${n}`, w - M, h - 8, { align: "right" });
+    }
+    doc.save(fileName(r, "pdf"));
+    afterExport("PDF");
+  }
+
+  const menu = $("expMenu");
+  $("expPdf").addEventListener("click", () => { menu.open = false; try { exportPdf(); } catch (e) { console.error(e); toast("Export PDF gagal: " + e.message); } });
+  $("expXlsx").addEventListener("click", () => { menu.open = false; try { exportXlsx(); } catch (e) { console.error(e); toast("Export Excel gagal: " + e.message); } });
+  document.addEventListener("click", e => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); } });
+
   $("btnReset").addEventListener("click", () => { applyBrand(brandKey, true); calc(); toast(`Default ${BRANDS[brandKey].name} diterapkan`); });
 
   $("form").addEventListener("input", calc);
