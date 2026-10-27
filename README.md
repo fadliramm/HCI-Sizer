@@ -12,6 +12,7 @@ Kalkulator sizing Hyper-Converged Infrastructure (HCI) untuk vCPU, memori, dan s
 - Validasi desain (minimum node, proteksi, network, overhead)
 - Mode perbandingan antar brand untuk spesifikasi hardware yang sama
 - Export laporan ke PDF dan Excel (.xlsx)
+- Dashboard eksekutif untuk presentasi ke manajemen (mode layar penuh)
 
 Nilai default per brand adalah estimasi umum. Validasi dengan sizer resmi vendor untuk proposal final.
 

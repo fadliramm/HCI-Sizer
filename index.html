@@ -35,6 +35,10 @@
   --bar-loss: #E7B0A9;
   --bar-result: #1C58D1;
   --bar-gain: #2F9A69;
+  --seg-prot: #8E7CC3;
+  --seg-slack: #DDA03A;
+  --seg-rebuild: #6FA39B;
+  --seg-meta: #B5BECA;
   --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
@@ -45,6 +49,7 @@
     --accent: #6F9BFF; --accent-soft: #1A2946; --accent-ink: #0E1318;
     --ok: #4CC38A; --ok-soft: #12291F; --warn: #E8A53C; --warn-soft: #2E2312; --crit: #F06A5E; --crit-soft: #331816;
     --bar-total: #5E6B7A; --bar-loss: #7A3A34; --bar-result: #6F9BFF; --bar-gain: #3FAF7C;
+    --seg-prot: #9C8BDD; --seg-slack: #C99033; --seg-rebuild: #5E968E; --seg-meta: #4C5765;
     color-scheme: dark;
   }
 }
@@ -53,6 +58,7 @@
   --accent: #6F9BFF; --accent-soft: #1A2946; --accent-ink: #0E1318;
   --ok: #4CC38A; --ok-soft: #12291F; --warn: #E8A53C; --warn-soft: #2E2312; --crit: #F06A5E; --crit-soft: #331816;
   --bar-total: #5E6B7A; --bar-loss: #7A3A34; --bar-result: #6F9BFF; --bar-gain: #3FAF7C;
+  --seg-prot: #9C8BDD; --seg-slack: #C99033; --seg-rebuild: #5E968E; --seg-meta: #4C5765;
   color-scheme: dark;
 }
 
@@ -239,6 +245,98 @@ table.cmp button.go { padding: 5px 8px; font-size: 11.5px; }
 .issue-list { display: flex; flex-direction: column; gap: 10px; }
 .issue-list h3 { margin: 0 0 4px; font: 600 13px var(--font-display); }
 
+/* ---------- Page tabs ---------- */
+.pagetabs { display: flex; gap: 4px; margin: -8px 0 18px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.pagetabs button { border: 0; border-radius: 0; background: transparent; padding: 10px 14px; font: 600 14px var(--font-display); letter-spacing: 0.01em; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.pagetabs button:hover { color: var(--ink); }
+.pagetabs button[aria-pressed="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------- Executive dashboard ---------- */
+.dash { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dash:fullscreen { background: var(--bg); overflow: auto; padding-block: 28px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+.dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.dash-head .eyebrow { font: 600 11px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+input.proj { display: block; width: min(100%, 640px); border: 0; border-bottom: 1px dashed transparent; background: transparent; color: var(--ink); font: 700 32px/1.15 var(--font-display); letter-spacing: -0.01em; padding: 2px 0; }
+input.proj:hover, input.proj:focus { border-bottom-color: var(--line); outline: none; }
+.dash-sub { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.dash-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 980px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis .kpi.lead { grid-column: 1 / -1; } }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi .k { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.kpi .v { font: 700 34px/1.05 var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi .v small { font: 500 14px var(--font-mono); color: var(--muted); margin-left: 4px; }
+.kpi .s { font-size: 12px; color: var(--muted); }
+.kpi.lead { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.kpi.lead .k, .kpi.lead .s, .kpi.lead .v small { color: var(--accent-ink); opacity: 0.85; }
+.kpi.lead .v { font-size: 46px; }
+.dgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 980px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+.dcard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dcard.span2 { grid-column: span 2; }
+.dcard.span3 { grid-column: 1 / -1; }
+@media (max-width: 980px) { .dcard.span2, .dcard.span3 { grid-column: auto; } }
+.dcard h3 { margin: 0; font: 600 15px var(--font-display); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dcard h3 small { font: 500 11px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.lede { font-size: 14px; margin: 0; }
+.lede b { font-family: var(--font-display); font-size: 17px; }
+
+.stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.stack span { display: block; min-width: 0; }
+.seg-usable { background: var(--bar-result); }
+.seg-prot { background: var(--seg-prot); }
+.seg-slack { background: var(--seg-slack); }
+.seg-rebuild { background: var(--seg-rebuild); }
+.seg-meta { background: var(--seg-meta); }
+.stack-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 14px; }
+.stack-legend div { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.stack-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.stack-legend em { grid-column: 2; font: 500 12px var(--font-mono); font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.meters { display: flex; flex-direction: column; gap: 14px; }
+.meter .row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.meter .row b { font: 600 15px var(--font-display); font-variant-numeric: tabular-nums; }
+.meter .track { height: 8px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; margin-top: 5px; }
+.meter .track span { display: block; height: 100%; background: var(--bar-result); }
+.meter small { font-size: 11.5px; color: var(--muted); }
+
+.rack { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; }
+.srv { border: 1px solid var(--line); border-radius: 5px; padding: 6px 7px 5px; background: var(--panel-2); display: flex; flex-direction: column; gap: 4px; }
+.srv .face { height: 14px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 5px); position: relative; }
+.srv .face::after { content: ""; position: absolute; right: 2px; top: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+.srv span { font: 500 10px var(--font-mono); color: var(--muted); text-align: center; }
+.srv.ha { border-style: dashed; background: transparent; }
+.srv.ha .face::after { background: var(--warn); }
+.rack-legend { font-size: 12px; color: var(--muted); }
+
+.kv { display: flex; flex-direction: column; gap: 0; }
+.kv div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: baseline; }
+.kv div:last-child { border-bottom: 0; }
+.kv span { color: var(--muted); }
+.kv b { font-weight: 600; text-align: right; }
+
+.riskcount { display: flex; gap: 8px; flex-wrap: wrap; }
+.riskcount div { flex: 1; min-width: 80px; border-radius: 8px; padding: 8px 10px; }
+.riskcount .crit { background: var(--crit-soft); color: var(--crit); }
+.riskcount .warn { background: var(--warn-soft); color: var(--warn); }
+.riskcount b { display: block; font: 700 24px var(--font-display); }
+.riskcount span { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.bchart { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 3fr) auto auto; gap: 8px 12px; align-items: center; }
+.bchart .h { font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bchart .h.r { text-align: right; }
+.bchart .nm { font-size: 13px; min-width: 0; }
+.bchart .nm b { font-family: var(--font-display); font-weight: 600; }
+.bchart .nm small { display: block; color: var(--muted); font-size: 11px; }
+.bchart .bt { height: 20px; background: var(--panel-2); border-radius: 4px; position: relative; overflow: hidden; }
+.bchart .bt span { position: absolute; inset: 0 auto 0 0; background: var(--bar-total); border-radius: 4px; }
+.bchart .bt.cur span { background: var(--bar-result); }
+.bchart .bt.bad span { background: var(--bar-loss); }
+.bchart .bt em { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); font: 600 11.5px var(--font-mono); font-style: normal; color: var(--ink); white-space: nowrap; }
+.bchart .n { font: 600 15px var(--font-display); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) { .bchart { grid-template-columns: minmax(0, 1fr) auto auto; } .bchart .bt { grid-column: 1 / -1; order: 0; } .bchart .h.bar { display: none; } }
+.reco { margin: 0; font-size: 13.5px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); }
+
 .foot { margin-top: 20px; color: var(--muted); font-size: 12px; max-width: 90ch; }
 .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; font-size: 13px; }
 textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
@@ -266,7 +364,37 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     </div>
   </header>
 
-  <div class="grid">
+  <nav class="pagetabs" aria-label="Halaman">
+    <button type="button" data-page="calc" aria-pressed="true">Kalkulator</button>
+    <button type="button" data-page="dash" aria-pressed="false">Dashboard eksekutif</button>
+  </nav>
+
+  <!-- ================= EXECUTIVE DASHBOARD ================= -->
+  <div class="dash" id="pageDash" hidden>
+    <div class="dash-head">
+      <div>
+        <div class="eyebrow">Ringkasan desain HCI</div>
+        <input id="projName" class="proj" type="text" value="Proyek HCI" aria-label="Nama proyek" maxlength="80">
+        <div class="dash-sub" id="dSub"></div>
+      </div>
+      <div class="dash-actions">
+        <span class="status" id="dStatus"></span>
+        <button type="button" id="btnEdit">Ubah spesifikasi</button>
+        <button type="button" id="btnFull" class="primary">Mode presentasi</button>
+      </div>
+    </div>
+    <div class="kpis" id="dKpis"></div>
+    <div class="dgrid">
+      <section class="dcard span2"><h3>Ke mana kapasitas raw pergi <small id="dStackUnit"></small></h3><p class="lede" id="dStackLede"></p><div class="stack" id="dStack"></div><div class="stack-legend" id="dStackLegend"></div></section>
+      <section class="dcard"><h3>Resource untuk VM <small>dari total fisik</small></h3><div class="meters" id="dMeters"></div></section>
+      <section class="dcard"><h3>Topologi cluster <small id="dNodeCount"></small></h3><div class="rack" id="dRack"></div><div class="rack-legend" id="dRackLegend"></div></section>
+      <section class="dcard"><h3>Ketahanan</h3><div class="kv" id="dResil"></div></section>
+      <section class="dcard"><h3>Status desain</h3><div class="riskcount" id="dRiskCount"></div><div class="alerts" id="dRisk"></div></section>
+      <section class="dcard span3"><h3>Perbandingan platform <small id="dCmpNote"></small></h3><div class="bchart" id="dBrands"></div><p class="reco" id="dReco"></p></section>
+    </div>
+  </div>
+
+  <div class="grid" id="pageCalc">
     <!-- ================= SPEC SHEET ================= -->
     <form class="sheet" id="form" autocomplete="off" onsubmit="return false">
       <section class="sec">
@@ -582,12 +710,13 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   const OVERRIDE_KEYS = ["ctrlCores","ctrlRam","hypRam","diskCores","diskRam","fsOverhead","slack","drr"];
 
   const $ = id => document.getElementById(id);
-  const IDS = ["nodes","ha","rebuild","sockets","cores","ghz","ht","ram","capQty","capSize","capType","cacheQty","cacheSize","cacheType","nicPorts","nicSpeed","prot","drr","slack","fsOverhead","vcpuRatio","vcpuBasis","memRatio","util","ctrlCores","ctrlRam","hypRam","diskCores","diskRam","vmVcpu","vmRam","vmDisk","cmpLevel","cmpDrr","cmpOverhead"];
+  const IDS = ["nodes","ha","rebuild","sockets","cores","ghz","ht","ram","capQty","capSize","capType","cacheQty","cacheSize","cacheType","nicPorts","nicSpeed","prot","drr","slack","fsOverhead","vcpuRatio","vcpuBasis","memRatio","util","ctrlCores","ctrlRam","hypRam","diskCores","diskRam","vmVcpu","vmRam","vmDisk","cmpLevel","cmpDrr","cmpOverhead","projName"];
   const STORE = "hci-sizer-v1";
   const TAG = { crit: "KRITIS", warn: "CATATAN", ok: "OK" };
   let brandKey = "nutanix";
   let unit = "TiB";
   let view = "detail";
+  let page = "calc";
   let cmpSel = Object.keys(BRANDS);
 
   const nf = (v, d = 0) => (isFinite(v) ? v : 0).toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -910,6 +1039,95 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     toast(`${BRANDS[k].name} dipilih dengan nilai default`);
   });
 
+  // ---------- executive dashboard ----------
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const pct = (a, b) => b > 0 ? a / b * 100 : 0;
+
+  function renderDashboard(r, rows) {
+    const p = r.p;
+    $("dSub").textContent = `${r.b.name} · ${r.N} node · ${r.prot.label} · HA N+${r.ha} · ${today()}`;
+    const st = $("dStatus");
+    st.className = "status " + (r.nCrit ? "crit" : r.nWarn ? "warn" : "ok");
+    st.textContent = r.nCrit ? `${r.nCrit} isu kritis` : r.nWarn ? `${r.nWarn} catatan` : "Desain OK";
+
+    const capHtml = tb => { const v = capNum(tb); return `${nf(v, v < 100 ? 1 : 0)}<small>${unit}</small>`; };
+    const ramHtml = gb => gb >= 1024 ? `${nf(gb / 1024, 1)}<small>TB</small>` : `${nf(gb)}<small>GB</small>`;
+    $("dKpis").innerHTML = [
+      { lead: true, k: "Kapasitas VM", v: `${nf(r.minFit)}<small>VM</small>`, s: `profil ${p.vmVcpu} vCPU · ${p.vmRam} GB · ${p.vmDisk} GB · pembatas: ${r.limiter}` },
+      { k: "vCPU tersedia", v: nf(r.vcpu), s: `rasio ${nf(p.vcpuRatio, 1)}:1 · ${nf(r.ghz)} GHz` },
+      { k: "RAM untuk VM", v: ramHtml(r.ramAlloc), s: `dari ${fmtGB(r.totalRam)} fisik` },
+      { k: "Usable storage", v: capHtml(r.usable), s: `dari raw ${fmtCap(r.rawTB)}` },
+      { k: "Effective storage", v: capHtml(r.effective), s: r.drr > 1 ? `data reduction ${nf(r.drr, 1)}:1` : "tanpa data reduction" },
+    ].map(x => `<div class="kpi${x.lead ? " lead" : ""}"><span class="k">${x.k}</span><span class="v">${x.v}</span><span class="s">${esc(x.s)}</span></div>`).join("");
+
+    // raw capacity breakdown
+    const segs = [
+      { k: "Usable", v: r.usable, c: "usable" },
+      { k: "Proteksi data", v: r.protLoss, c: "prot" },
+      { k: "Slack / free space", v: r.slackLoss, c: "slack" },
+      { k: "Reserve rebuild", v: r.rbLoss + r.azRes, c: "rebuild" },
+      { k: "Metadata / format", v: r.fsLoss, c: "meta" },
+    ].filter(s => s.v > 0);
+    $("dStackUnit").textContent = unit;
+    $("dStackLede").innerHTML = `Dari <b>${fmtCap(r.rawTB)}</b> raw, <b>${fmtCap(r.usable)}</b> siap dipakai VM (${nf(r.ratio * 100, 1)}%).${r.drr > 1 ? ` Dengan data reduction ${nf(r.drr, 1)}:1 setara <b>${fmtCap(r.effective)}</b>.` : ""}`;
+    $("dStack").innerHTML = segs.map(s => `<span class="seg-${s.c}" style="width:${pct(s.v, r.rawTB)}%" title="${s.k}: ${fmtCap(s.v)}"></span>`).join("");
+    $("dStackLegend").innerHTML = segs.map(s => `<div><i class="seg-${s.c}"></i><span>${s.k}</span><em>${fmtCap(s.v)} · ${nf(pct(s.v, r.rawTB), 1)}%</em></div>`).join("");
+
+    // resource meters
+    $("dMeters").innerHTML = [
+      { k: "Compute", a: r.utilCores, b: r.totalCores, t: `${cf(r.utilCores)} dari ${nf(r.totalCores)} core` },
+      { k: "Memori", a: r.utilRam, b: r.totalRam, t: `${fmtGB(r.utilRam)} dari ${fmtGB(r.totalRam)}` },
+      { k: "Storage", a: r.usable, b: r.rawTB, t: `${fmtCap(r.usable)} dari ${fmtCap(r.rawTB)}` },
+    ].map(m => `<div class="meter"><div class="row"><span>${m.k}</span><b>${nf(pct(m.a, m.b), 0)}%</b></div><div class="track"><span style="width:${Math.min(100, pct(m.a, m.b))}%"></span></div><small>${m.t}</small></div>`).join("")
+      + `<small class="rack-legend">Sisanya dipakai overhead platform, reserve HA, batas utilisasi, dan proteksi data.</small>`;
+
+    // topology
+    const shown = Math.min(r.N, 32);
+    $("dNodeCount").textContent = `${r.N} server`;
+    $("dRack").innerHTML = Array.from({ length: shown }, (_, i) => {
+      const isHa = i >= r.N - r.ha;
+      return `<div class="srv${isHa ? " ha" : ""}"><div class="face"></div><span>${isHa ? "HA" : "Node " + (i + 1)}</span></div>`;
+    }).join("") + (r.N > shown ? `<div class="srv"><span>+${r.N - shown}</span></div>` : "");
+    $("dRackLegend").innerHTML = `Per server: ${p.sockets}×${p.cores} core · ${nf(p.ram)} GB · ${p.capQty}× ${p.capSize} TB ${p.capType} · ${p.nicPorts}× ${p.nicSpeed} GbE.${r.ha ? ` Kapasitas setara ${r.ha} server (garis putus) dicadangkan untuk failover.` : ""}`;
+
+    // resilience
+    const ft = r.prot.ft || 0;
+    $("dResil").innerHTML = [
+      ["Kegagalan yang ditoleransi data", ft ? `${ft} node / disk` : "tidak ada"],
+      ["Skema proteksi", r.prot.label],
+      ["Failover compute (HA)", r.ha ? `${r.ha} node gagal, semua VM tetap jalan` : "tidak ada reserve"],
+      ["Self-healing storage", r.rb ? `kapasitas ${r.rb} node dicadangkan` : r.b.azureReserve ? `reserve ${Math.min(r.N, 4)} disk (S2D)` : "tidak ada reserve"],
+      ["Redundansi network", p.nicPorts >= 2 ? `${p.nicPorts}× ${p.nicSpeed} GbE, tahan 1 link putus` : "1 link, tanpa redundansi"],
+    ].map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join("");
+
+    // risks
+    $("dRiskCount").innerHTML = `<div class="crit"><b>${r.nCrit}</b><span>kritis</span></div><div class="warn"><b>${r.nWarn}</b><span>catatan</span></div>`;
+    const top = [...r.alerts].sort((a, b) => (a[0] === "crit" ? 0 : 1) - (b[0] === "crit" ? 0 : 1)).slice(0, 3);
+    $("dRisk").innerHTML = top.map(([t, m]) => `<div class="alert ${t}"><span class="tag">${TAG[t]}</span><span>${m}</span></div>`).join("")
+      + (r.alerts.length > 3 ? `<small class="rack-legend">+${r.alerts.length - 3} lainnya di tab Kalkulator.</small>` : "");
+
+    // platform comparison
+    $("dCmpNote").textContent = $("cmpLevel").selectedOptions[0].textContent;
+    const sorted = [...rows].sort((a, b) => (a.nCrit ? 1 : 0) - (b.nCrit ? 1 : 0) || b.minFit - a.minFit || b.usable - a.usable);
+    const maxU = Math.max(...rows.map(x => x.usable), 1e-9);
+    $("dBrands").innerHTML = `<span class="h">Platform</span><span class="h bar">Usable storage</span><span class="h r">VM</span><span class="h r">Status</span>`
+      + sorted.map(x => `<div class="nm"><b>${x.b.name}</b><small>${x.prot.label}</small></div>
+        <div class="bt${x.k === brandKey ? " cur" : ""}${x.nCrit ? " bad" : ""}"><span style="width:${pct(x.usable, maxU)}%"></span><em>${fmtCap(x.usable)}</em></div>
+        <div class="n">${nf(x.minFit)}</div>
+        <div><span class="status ${x.nCrit ? "crit" : x.nWarn ? "warn" : "ok"}">${statusText(x)}</span></div>`).join("");
+    const ok = sorted.filter(x => !x.nCrit);
+    if (!ok.length) {
+      $("dReco").textContent = "Belum ada platform yang lolos aturan dasar untuk spesifikasi ini. Periksa jumlah node, network, dan tipe disk.";
+    } else {
+      const best = ok[0], low = ok[ok.length - 1];
+      const gain = low.minFit > 0 ? (best.minFit / low.minFit - 1) * 100 : 0;
+      $("dReco").innerHTML = `Dari sisi kapasitas, <b>${best.b.name}</b> menampung VM terbanyak (${nf(best.minFit)} VM, usable ${fmtCap(best.usable)})`
+        + (ok.length > 1 && gain > 0.5 ? `, ${nf(gain)}% lebih banyak dari ${low.b.name}.` : ".")
+        + (best.k !== brandKey ? ` Platform yang sedang dipilih, ${r.b.name}, menampung ${nf(r.minFit)} VM.` : "")
+        + ` Perbandingan ini belum memperhitungkan harga lisensi dan dukungan.`;
+    }
+  }
+
   // ---------- main ----------
   let lastSummary = "";
   function calc() {
@@ -918,6 +1136,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     renderDetail(r);
     let rows = [];
     if (view === "compare") { rows = compareResults(base); renderCompare(rows, base); }
+    if (page === "dash") renderDashboard(r, compareResults(base, cmpSel.length ? cmpSel : Object.keys(BRANDS)));
     lastSummary = view === "compare" ? compareSummary(rows, base) : detailSummary(r);
     save();
   }
@@ -959,6 +1178,23 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
   }
   document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.view); calc(); }));
+  function setPage(pg) {
+    page = pg;
+    $("pageCalc").hidden = pg !== "calc";
+    $("pageDash").hidden = pg !== "dash";
+    document.querySelectorAll("[data-page]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.page === pg)));
+  }
+  document.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => { setPage(b.dataset.page); calc(); window.scrollTo(0, 0); }));
+  $("btnEdit").addEventListener("click", () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); setPage("calc"); calc(); });
+  $("btnFull").addEventListener("click", () => {
+    const el = $("pageDash");
+    if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+    if (!el.requestFullscreen) { toast("Browser ini tidak mendukung layar penuh. Tekan F11 untuk presentasi."); return; }
+    el.requestFullscreen().catch(() => toast("Layar penuh diblokir di sini. Tekan F11 atau buka versi GitHub Pages."));
+  });
+  document.addEventListener("fullscreenchange", () => { $("btnFull").textContent = document.fullscreenElement ? "Keluar presentasi" : "Mode presentasi"; });
+  $("projName").addEventListener("input", save);
+
   function setUnit(u) {
     unit = u;
     document.querySelectorAll("[data-unit]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.unit === u)));
@@ -968,7 +1204,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   // ---------- persistence ----------
   function save() {
     try {
-      const s = { brand: brandKey, unit, view, cmpSel };
+      const s = { brand: brandKey, unit, view, page, cmpSel };
       IDS.forEach(id => s[id] = $(id).type === "checkbox" ? $(id).checked : $(id).value);
       localStorage.setItem(STORE, JSON.stringify(s));
     } catch (e) {}
@@ -982,6 +1218,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       if (s.unit) setUnit(s.unit);
       if (Array.isArray(s.cmpSel)) cmpSel = s.cmpSel.filter(k => BRANDS[k]);
       if (s.view) setView(s.view);
+      if (s.page === "dash") setPage("dash");
       return true;
     } catch (e) { return false; }
   }
@@ -1136,7 +1373,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(...INK);
     doc.text("HCI Sizing Report", M, y);
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
-    doc.text(T(`${r.b.name} · ${r.N} node · ${r.prot.label} · dibuat ${today()}`), M, y + 6);
+    doc.text(T(`${$("projName").value.trim() || "Proyek HCI"} · ${r.b.name} · ${r.N} node · ${r.prot.label} · dibuat ${today()}`), M, y + 6);
     doc.setDrawColor(...ACC); doc.setLineWidth(0.6); doc.line(M, y + 9, pw() - M, y + 9);
     y += 15;
 
@@ -1237,7 +1474,8 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   $("viewCompare").addEventListener("change", e => { if (e.target.tagName === "SELECT") calc(); });
 
   if (!load()) applyBrand("nutanix", true);
-  if (location.hash === "#compare") setView("compare");
+  if (location.hash === "#compare") { setPage("calc"); setView("compare"); }
+  if (location.hash === "#dashboard") setPage("dash");
   syncChips();
   calc();
 })();
