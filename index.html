@@ -149,6 +149,8 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 .brand input:checked + label { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 .brand input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
 .brand-note { font-size: 12px; color: var(--muted); background: var(--panel-2); border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
+.brand-note .src { display: block; margin-top: 6px; font-size: 11.5px; }
+.brand-note a { color: var(--accent); }
 
 /* ---------- Readout ---------- */
 .readout { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -592,7 +594,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     </div>
   </div>
 
-  <p class="foot">Nilai default overhead, proteksi, dan slack per brand adalah estimasi umum dari dokumentasi publik dan praktik lapangan. Untuk proposal final, validasi dengan sizer resmi vendor (Nutanix Sizer, VMware vSAN ReadyNode Sizer, Sangfor HCI Sizer, Ceph/Proxmox calculator, Azure Local sizer). Raw ditulis dalam TB desimal seperti label disk; TiB = TB × 0,9095.</p>
+  <p class="foot">Default per brand terakhir diperbarui 9 November 2026. Nilai default overhead, proteksi, dan slack per brand adalah estimasi umum dari dokumentasi publik dan praktik lapangan; sumber tiap brand tercantum di catatan brand. Untuk proposal final, validasi dengan sizer resmi vendor (Nutanix Sizer, VMware vSAN ReadyNode Sizer, Sangfor HCI Sizer, Ceph/Proxmox calculator, Azure Local sizer). Raw ditulis dalam TB desimal seperti label disk; TiB = TB × 0,9095.</p>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -608,20 +610,25 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       name: "Nutanix", sub: "AHV · AOS", minNodes: 3,
       ctrlCores: 8, ctrlRam: 32, hypRam: 4, diskCores: 0, diskRam: 0,
       cacheCounts: true, fsOverhead: 5, slack: 10, drr: 1.5, rebuild: 1, azureReserve: false,
-      note: "CVM berjalan di tiap node (default 8 vCPU / 32 GB, bisa 12+ vCPU dan 48 GB untuk all-NVMe atau fitur dedup). Semua SSD/NVMe masuk ke storage pool, jadi disk 'cache' ikut dihitung sebagai kapasitas. EC-X hanya berlaku untuk data dingin, jadi efisiensi nyata ada di antara RF2 dan EC-X.",
+      note: "CVM berjalan di tiap node: umumnya 8–12 vCPU dan 32 GB (lebih dari 32 GB, hingga 64 GB, untuk working set besar atau dedup). Semua SSD/NVMe masuk ke storage pool, jadi disk 'cache' ikut dihitung sebagai kapasitas. RF3 butuh minimal 5 node. Strip EC-X mengikuti jumlah node (FT1: 2/1 di 4 node, 3/1 di 5, 4/1 di 6+; FT2: 2/2 di 6, 3/2 di 7, 4/2 di 8+) dan hanya berlaku untuk data dingin, jadi efisiensi nyata ada di antara RF dan EC-X.",
+      src: [["Nutanix Bible: Data Efficiency", "https://www.nutanixbible.com/4h-book-of-aos-data-efficiency.html"], ["Nutanix Bible: Data Resilience", "https://www.nutanixbible.com/4i-book-of-aos-data-resilience-and-ha.html"], ["Nutanix: CPU di AHV & CVM", "https://www.nutanix.com/tech-center/blog/understanding-cpu-resource-management-in-nutanix-ahv"]],
       prot: [
         { id: "rf2", label: "RF2 · 2 copy (FT1)", eff: 1/2, min: 3, ft: 1, kind: "m" },
         { id: "rf3", label: "RF3 · 3 copy (FT2)", eff: 1/3, min: 5, ft: 2, kind: "m" },
-        { id: "ecx21", label: "EC-X RF2 · 2+1", eff: 2/3, min: 4, ft: 1, kind: "ec" },
-        { id: "ecx41", label: "EC-X RF2 · 4+1", eff: 4/5, min: 6, ft: 1, kind: "ec" },
-        { id: "ecx42", label: "EC-X RF3 · 4+2", eff: 4/6, min: 7, ft: 2, kind: "ec" },
+        { id: "ecx21", label: "EC-X FT1 · 2/1", eff: 2/3, min: 4, ft: 1, kind: "ec" },
+        { id: "ecx31", label: "EC-X FT1 · 3/1", eff: 3/4, min: 5, ft: 1, kind: "ec" },
+        { id: "ecx41", label: "EC-X FT1 · 4/1", eff: 4/5, min: 6, ft: 1, kind: "ec" },
+        { id: "ecx22", label: "EC-X FT2 · 2/2", eff: 2/4, min: 6, ft: 2, kind: "ec" },
+        { id: "ecx32", label: "EC-X FT2 · 3/2", eff: 3/5, min: 7, ft: 2, kind: "ec" },
+        { id: "ecx42", label: "EC-X FT2 · 4/2", eff: 4/6, min: 8, ft: 2, kind: "ec" },
       ],
     },
     vsan_esa: {
       name: "VMware vSAN ESA", sub: "vSphere 8+ · NVMe", minNodes: 3,
       ctrlCores: 2, ctrlRam: 24, hypRam: 4, diskCores: 0, diskRam: 0,
-      cacheCounts: true, fsOverhead: 2, slack: 15, drr: 1.5, rebuild: 1, azureReserve: false,
-      note: "ESA tidak memakai cache tier: semua disk NVMe adalah kapasitas (isi disk cache = 0). Reserve rebuild 1 host + operations reserve ~10–15%. RAID-5 memakai 2+1 di cluster 3–5 host dan 4+1 di 6+ host.",
+      cacheCounts: true, fsOverhead: 2, slack: 10, drr: 1.5, rebuild: 1, azureReserve: false,
+      note: "ESA tidak memakai cache tier: semua disk NVMe adalah kapasitas (isi disk cache = 0). Kapasitas cadangan vSAN terdiri dari Host Rebuild Reserve (setara 1 host, di sini 'reserve rebuild') dan Operations Reserve (di sini slack 10%). RAID-5 adaptif memakai 2+1 di 3–5 host dan 4+1 di 6+ host. ReadyNode ESA umumnya 512 GB RAM; overhead memori vSAN relatif kecil, cek angka pasti di vSAN Sizer.",
+      src: [["VMware: reserved capacity di vSAN", "https://blogs.vmware.com/cloud-foundation/2022/02/18/understanding-reserved-capacity-concepts-in-vsan/"], ["Yellow Bricks: RAID-5 adaptif ESA", "https://www.yellow-bricks.com/?p=21054"], ["Broadcom KB 326889", "https://knowledge.broadcom.com/external/article/326889"]],
       prot: [
         { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
         { id: "r5a", label: "RAID-5 · FTT1 (2+1)", eff: 2/3, min: 3, ft: 1, kind: "ec" },
@@ -633,8 +640,9 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     vsan_osa: {
       name: "VMware vSAN OSA", sub: "disk group · cache tier", minNodes: 3,
       ctrlCores: 2, ctrlRam: 16, hypRam: 4, diskCores: 0, diskRam: 0,
-      cacheCounts: false, fsOverhead: 1, slack: 25, drr: 1.3, rebuild: 1, azureReserve: false,
-      note: "Setiap disk group butuh 1 disk cache (tidak dihitung kapasitas). VMware menyarankan slack 25–30%. Dedup & kompresi hanya untuk all-flash.",
+      cacheCounts: false, fsOverhead: 1, slack: 15, drr: 1.3, rebuild: 1, azureReserve: false,
+      note: "Setiap disk group butuh 1 disk cache (tidak dihitung kapasitas). Sejak vSAN 7 U1, panduan slack 25–30% diganti Host Rebuild Reserve (1 host, di sini 'reserve rebuild') + Operations Reserve (di sini slack 15%). Kalau reserve rebuild dimatikan, naikkan slack ke 25–30%. Dedup & kompresi hanya untuk all-flash.",
+      src: [["VMware: reserved capacity di vSAN", "https://blogs.vmware.com/cloud-foundation/2022/02/18/understanding-reserved-capacity-concepts-in-vsan/"], ["Cormac Hogan: capacity vSAN 7 U1", "https://cormachogan.com/2020/10/29/vsan-capacity-management-in-v7-0u1/"]],
       prot: [
         { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
         { id: "r5", label: "RAID-5 · FTT1 (3+1)", eff: 3/4, min: 4, ft: 1, kind: "ec" },
@@ -645,8 +653,9 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     vxrail: {
       name: "Dell VxRail", sub: "vSAN ESA / OSA", minNodes: 3,
       ctrlCores: 2, ctrlRam: 24, hypRam: 4, diskCores: 0, diskRam: 0,
-      cacheCounts: true, fsOverhead: 2, slack: 15, drr: 1.5, rebuild: 1, azureReserve: false,
-      note: "VxRail memakai vSAN; default di sini mengikuti vSAN ESA. Untuk VxRail OSA (hybrid / disk group), set slack 25–30% dan perlakukan disk cache sebagai non-kapasitas. VxRail Manager memakai ~2 vCPU / 8 GB di cluster.",
+      cacheCounts: true, fsOverhead: 2, slack: 10, drr: 1.5, rebuild: 1, azureReserve: false,
+      note: "VxRail memakai vSAN; default di sini mengikuti vSAN ESA (Host Rebuild Reserve 1 host + Operations Reserve 10%). Untuk VxRail OSA (hybrid / disk group), pakai preset vSAN OSA. VxRail Manager memakai ~2 vCPU / 8 GB di cluster. Broadcom menyarankan VxRail Sizer untuk angka final.",
+      src: [["Broadcom KB 326889", "https://knowledge.broadcom.com/external/article/326889"], ["VMware: reserved capacity di vSAN", "https://blogs.vmware.com/cloud-foundation/2022/02/18/understanding-reserved-capacity-concepts-in-vsan/"]],
       prot: [
         { id: "r1f1", label: "RAID-1 · FTT1 mirror", eff: 1/2, min: 3, ft: 1, kind: "m" },
         { id: "r5a", label: "RAID-5 · FTT1 (2+1)", eff: 2/3, min: 3, ft: 1, kind: "ec" },
@@ -659,7 +668,8 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       name: "Sangfor HCI", sub: "aSV · aSAN", minNodes: 3,
       ctrlCores: 4, ctrlRam: 16, hypRam: 8, diskCores: 0, diskRam: 0,
       cacheCounts: false, fsOverhead: 5, slack: 10, drr: 1.0, rebuild: 1, azureReserve: false,
-      note: "aSAN memakai SSD sebagai cache tier pada konfigurasi hybrid (tidak dihitung kapasitas). Overhead aSV + aSAN diestimasi 4 core dan ~24 GB per node; angka pasti tergantung versi dan jumlah disk.",
+      note: "Datasheet Sangfor menyebut aSAN mendukung 2–3 copy, akselerasi SSD, tiering, dan data locality. Overhead aSV + aSAN (estimasi 4 core dan ~24 GB per node) serta opsi EC di preset ini belum bisa diverifikasi dari dokumen publik; konfirmasi ke Sangfor HCI Sizer atau tim Sangfor.",
+      src: [["Sangfor HCI datasheet", "https://sangfor.com/sites/default/files/2024-08/hci_ds_p_sangfor-hci-datasheet-–-software-based_20240821.pdf"]],
       prot: [
         { id: "rep2", label: "2 replika (FT1)", eff: 1/2, min: 2, ft: 1, kind: "m" },
         { id: "rep3", label: "3 replika (FT2)", eff: 1/3, min: 3, ft: 2, kind: "m" },
@@ -670,9 +680,10 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     },
     proxmox: {
       name: "Proxmox VE", sub: "KVM · Ceph RBD", minNodes: 3,
-      ctrlCores: 0, ctrlRam: 0, hypRam: 4, diskCores: 1, diskRam: 5,
+      ctrlCores: 2, ctrlRam: 4, hypRam: 4, diskCores: 1, diskRam: 8,
       cacheCounts: false, fsOverhead: 3, slack: 15, drr: 1.0, rebuild: 1, azureReserve: false,
-      note: "Overhead Ceph dihitung per OSD (1 disk = 1 OSD): ~1 core dan ~5 GB RAM (osd_memory_target 4 GB + buffer). Disk cache dipakai untuk WAL/DB, bukan kapasitas. Slack 15% menjaga di bawah nearfull ratio 85%. Ceph tidak melakukan dedup.",
+      note: "Overhead Ceph: MON + MGR ~2 core / 4 GB per node, ditambah per OSD (1 disk = 1 OSD) ~1 core dan 8 GB RAM (Ceph menyarankan RAM > jumlah OSD × osd_memory_target 4 GiB × 2). Untuk NVMe performa tinggi, Proxmox menyebut 4–6 thread per OSD. Disk cache dipakai untuk WAL/DB, bukan kapasitas. Slack 15% menjaga di bawah nearfull ratio 85%. Ceph tidak melakukan dedup.",
+      src: [["Ceph: hardware recommendations", "https://docs.ceph.com/en/latest/start/hardware-recommendations/"], ["Proxmox VE: Ceph (pveceph)", "https://pve.proxmox.com/pve-docs/chapter-pveceph.html"]],
       prot: [
         { id: "rep3", label: "Replika 3/2 (standar Ceph)", eff: 1/3, min: 3, ft: 2, kind: "m" },
         { id: "rep2", label: "Replika 2/1 (tidak disarankan)", eff: 1/2, min: 2, ft: 1, kind: "m" },
@@ -685,11 +696,13 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
       name: "Azure Local", sub: "Hyper-V · S2D", minNodes: 1,
       ctrlCores: 2, ctrlRam: 8, hypRam: 8, diskCores: 0, diskRam: 0,
       cacheCounts: false, fsOverhead: 2, slack: 10, drr: 1.0, rebuild: 0, azureReserve: true,
-      note: "Storage Spaces Direct menyarankan reserve setara 1 disk kapasitas per server (maksimal 4 disk) untuk repair in-place, sehingga reserve rebuild 1 node tidak wajib. Efisiensi dual parity naik dengan jumlah node: 50% (4–6), 66,7% (7–8), 75% (9–15), 80% (16).",
+      note: "Microsoft menyarankan reserve setara 1 disk kapasitas per server, maksimal 4 disk, untuk repair in-place, sehingga reserve rebuild 1 node tidak wajib. Efisiensi dual parity naik dengan jumlah node. All-flash: 50% (4–6), 66,7% (7–8), 75% (9–15), 80% (16). Hybrid dengan HDD: 50% (4–6), 66,7% (7–11), 72,7% (12–16).",
+      src: [["Microsoft: plan volumes (reserve)", "https://learn.microsoft.com/en-us/azure/azure-local/concepts/plan-volumes"], ["Microsoft: fault tolerance & efisiensi", "https://learn.microsoft.com/en-us/windows-server/storage/storage-spaces/fault-tolerance"]],
       prot: [
         { id: "m2", label: "Two-way mirror (FT1)", eff: 1/2, min: 2, ft: 1, kind: "m" },
         { id: "m3", label: "Three-way mirror (FT2)", eff: 1/3, min: 3, ft: 2, kind: "m" },
-        { id: "dp", label: "Dual parity (FT2)", eff: n => n >= 16 ? 0.8 : n >= 9 ? 0.75 : n >= 7 ? 2/3 : 0.5, min: 4, ft: 2, kind: "ec" },
+        { id: "dp", label: "Dual parity (FT2)", min: 4, ft: 2, kind: "ec",
+          eff: (n, hybrid) => hybrid ? (n >= 12 ? 8/11 : n >= 7 ? 2/3 : 0.5) : (n >= 16 ? 0.8 : n >= 9 ? 0.75 : n >= 7 ? 2/3 : 0.5) },
       ],
     },
     generic: {
@@ -724,7 +737,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
   const capNum = tb => unit === "TiB" ? tb * TB_TO_TIB : tb;
   const fmtCap = tb => { const v = capNum(tb); return nf(v, v < 100 ? 2 : 1) + " " + unit; };
   const fmtGB = gb => gb >= 1024 ? nf(gb / 1024, 2) + " TB" : nf(gb) + " GB";
-  const effOf = (p, n) => typeof p.eff === "function" ? p.eff(n) : p.eff;
+  const effOf = (p, n, hybrid = false) => typeof p.eff === "function" ? p.eff(n, hybrid) : p.eff;
 
   // ---------- inputs ----------
   function readInputs() {
@@ -800,7 +813,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     r.rbLoss = Math.min(r.afterAz, rb * r.capNodeTB * (1 - r.fs));
     r.pool = Math.max(0, r.afterAz - r.rbLoss);
     r.prot = b.prot.find(x => x.id === p.protId) || b.prot[0];
-    r.eff = effOf(r.prot, N);
+    r.eff = effOf(r.prot, N, p.capType === "HDD");
     r.logical = r.pool * r.eff;
     r.protLoss = r.pool - r.logical;
     r.slack = Math.min(100, Math.max(0, p.slack)) / 100;
@@ -879,7 +892,7 @@ textarea.copybox { width: 100%; min-height: 160px; font: 12px var(--font-mono); 
     brandKey = k;
     $("b_" + k).checked = true;
     const b = BRANDS[k];
-    $("brandNote").textContent = b.note;
+    $("brandNote").innerHTML = esc(b.note) + (b.src ? `<span class="src">Sumber: ${b.src.map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(" · ")}</span>` : "");
     fillProt($("prot").value);
     if (setDefaults) {
       OVERRIDE_KEYS.forEach(f => $(f).value = b[f]);
